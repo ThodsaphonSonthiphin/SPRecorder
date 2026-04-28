@@ -18,6 +18,8 @@ public sealed record AppConfig
 
     public bool PromptForSessionName { get; init; } = false;
 
+    public bool AutoDetectCallsEnabled { get; init; } = false;
+
     public static AppConfig Load(IConfiguration cfg)
     {
         var raw = cfg.Get<AppConfig>() ?? new AppConfig();

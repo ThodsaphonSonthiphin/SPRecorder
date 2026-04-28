@@ -22,6 +22,7 @@ public class AppConfigStoreTests
                 MixedFileFormat = "Stereo",
                 MixedFileSampleRate = 48000,
                 PromptForSessionName = true,
+                AutoDetectCallsEnabled = true,
             };
 
             store.Save(updated);
@@ -31,6 +32,7 @@ public class AppConfigStoreTests
             Assert.Equal("Ctrl+Shift+M", root.GetProperty("Hotkey").GetString());
             Assert.Equal("Stereo", root.GetProperty("MixedFileFormat").GetString());
             Assert.True(root.GetProperty("PromptForSessionName").GetBoolean());
+            Assert.True(root.GetProperty("AutoDetectCallsEnabled").GetBoolean());
             Assert.Equal(128, store.Current.Mp3BitrateKbps);
         }
         finally

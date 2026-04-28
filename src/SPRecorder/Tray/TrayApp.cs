@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
+using SPRecorder.Audio;
 using SPRecorder.Configuration;
 using SPRecorder.Hotkey;
 using SPRecorder.Recording;
@@ -13,6 +14,7 @@ internal sealed class TrayApp : ApplicationContext
     private readonly AppConfigStore _store;
     private readonly NotifyIcon _notifyIcon;
     private readonly RecordingSession _session;
+    private readonly CallDetector _callDetector;
     private GlobalHotkey? _hotkey;
     private readonly Icon _idleIcon;
     private readonly Icon _recIcon;
@@ -20,6 +22,9 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ToolStripMenuItem _toggleItem;
     private readonly ToolStripMenuItem _statusItem;
     private readonly SynchronizationContext _uiContext;
+
+    private bool _autoStarted;
+    private CallEndConfirmation? _callEndToast;
 
     public TrayApp(AppConfigStore store)
     {
@@ -35,6 +40,10 @@ internal sealed class TrayApp : ApplicationContext
         _session.Warning         += msg => OnUi(() => ShowBalloon(ToolTipIcon.Warning, "SPRecorder", msg));
         _session.MixingStarted   += () => OnUi(() => ShowBalloon(ToolTipIcon.Info, "Mixing tracks…", "Combining system + mic into one MP3 for AI summary."));
         _session.MixingCompleted += path => OnUi(() => OnMixingCompleted(path));
+
+        _callDetector = new CallDetector();
+        _callDetector.CallStarted += () => OnUi(OnCallStarted);
+        _callDetector.CallEnded   += () => OnUi(OnCallEnded);
 
         _toggleItem = new ToolStripMenuItem("Start recording", null, (_, _) => _session.Toggle())
         {
@@ -65,6 +74,9 @@ internal sealed class TrayApp : ApplicationContext
 
         _tooltipTimer = new System.Windows.Forms.Timer { Interval = 1000 };
         _tooltipTimer.Tick += (_, _) => UpdateTooltip();
+
+        if (_store.Current.AutoDetectCallsEnabled)
+            _callDetector.Start();
     }
 
     private void RegisterHotkey(string hotkeySpec)
@@ -101,6 +113,51 @@ internal sealed class TrayApp : ApplicationContext
         {
             ShowBalloon(ToolTipIcon.Info, "Settings saved", "");
         }
+
+        if (oldConfig.AutoDetectCallsEnabled != newConfig.AutoDetectCallsEnabled)
+        {
+            if (newConfig.AutoDetectCallsEnabled) _callDetector.Start();
+            else                                  _callDetector.Stop();
+        }
+    }
+
+    private void OnCallStarted()
+    {
+        // If a call-end confirmation is showing, the call has resumed — close the toast,
+        // keep recording, stay in auto-started mode.
+        if (_callEndToast != null)
+        {
+            _callEndToast.Close();
+            _callEndToast = null;
+            return;
+        }
+
+        if (_session.CurrentState == RecordingSession.State.Recording) return;
+
+        _autoStarted = true;
+        ShowBalloon(ToolTipIcon.Info, "Call detected", "Auto-recording started.");
+        _session.Start();
+    }
+
+    private void OnCallEnded()
+    {
+        if (!_autoStarted) return;
+        if (_session.CurrentState != RecordingSession.State.Recording) return;
+        if (_callEndToast != null) return; // already showing
+
+        _callEndToast = new CallEndConfirmation();
+        _callEndToast.StopRequested += () => OnUi(() =>
+        {
+            _callEndToast = null;
+            if (_session.CurrentState == RecordingSession.State.Recording)
+                _session.Stop();
+        });
+        _callEndToast.KeepRequested += () => OnUi(() =>
+        {
+            _callEndToast = null;
+            // _autoStarted stays true so the next CallEnded re-prompts.
+        });
+        _callEndToast.Show();
     }
 
     private void OpenSettings()
@@ -134,6 +191,14 @@ internal sealed class TrayApp : ApplicationContext
             _tooltipTimer.Stop();
             _notifyIcon.Text = "SPRecorder — idle";
             _statusItem.Text = "Idle";
+
+            // Reset auto-start tracking and dismiss any pending confirmation.
+            _autoStarted = false;
+            if (_callEndToast != null)
+            {
+                _callEndToast.Close();
+                _callEndToast = null;
+            }
 
             if (_session.SystemFilePath != null && _session.MicFilePath != null)
             {
@@ -197,6 +262,8 @@ internal sealed class TrayApp : ApplicationContext
     {
         _tooltipTimer.Stop();
         _hotkey?.Dispose();
+        _callDetector.Dispose();
+        _callEndToast?.Close();
         _session.Dispose();
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();

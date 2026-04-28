@@ -26,6 +26,7 @@ internal sealed class SettingsForm : Form
     private HotkeyCaptureControl _hotkey = null!;
     private ComboBox _bitrate = null!;
     private CheckBox _promptForName = null!;
+    private CheckBox _autoDetectCalls = null!;
 
     private ComboBox _micDevice = null!;
     private ComboBox _renderDevice = null!;
@@ -153,6 +154,18 @@ internal sealed class SettingsForm : Form
         page.Controls.Add(_promptForName);
         y += 24 + 2;
         page.Controls.Add(MakeHint("Saves files in OutputDirectory/<your-name>_<timestamp>/", TabPad + 22, y));
+        y += 18 + FieldGap;
+
+        // Auto-detect calls
+        _autoDetectCalls = new CheckBox
+        {
+            Text = "Auto-detect calls (Teams, Zoom, Meet, etc.)",
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, 24),
+        };
+        page.Controls.Add(_autoDetectCalls);
+        y += 24 + 2;
+        page.Controls.Add(MakeHint("Auto-starts recording when an app uses your mic + speakers; asks before stopping.", TabPad + 22, y));
 
         return page;
     }
@@ -381,6 +394,7 @@ internal sealed class SettingsForm : Form
             o => ((BitrateOption)o!).Kbps);
 
         _promptForName.Checked = cfg.PromptForSessionName;
+        _autoDetectCalls.Checked = cfg.AutoDetectCallsEnabled;
 
         PopulateAudioDevices();
 
@@ -446,6 +460,7 @@ internal sealed class SettingsForm : Form
             MixedFileFormat = _mixedStereo.Checked ? "Stereo" : "Mono",
             MixedFileSampleRate = sampleRate,
             PromptForSessionName = _promptForName.Checked,
+            AutoDetectCallsEnabled = _autoDetectCalls.Checked,
         };
         DialogResult = DialogResult.OK;
         Close();
