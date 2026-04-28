@@ -77,4 +77,14 @@ src/SPRecorder/
   Tray/IconFactory.cs           Generates idle/recording icons at runtime
 tests/SPRecorder.Tests/         xUnit tests for the pure pieces
 docs/ui-mockup.html             Visual mockup of tray UI states
+docs/settings-mockup.html       Visual mockup of upcoming Settings dialog
+docs/superpowers/specs/         Design specs for planned work
 ```
+
+## Roadmap
+
+Designed but not yet implemented:
+
+- **In-app Settings dialog** — tabbed Windows Forms window opened from the tray menu (General / Audio / Mixed file). Apply changes live without restart. Adds device pickers (microphone, system loopback) and stereo-mix option. See [docs/superpowers/specs/2026-04-28-settings-ui-design.md](docs/superpowers/specs/2026-04-28-settings-ui-design.md) for the full design.
+- **Named sessions** (opt-in) — after each recording stops, prompt for a topic name (e.g. *"Q2 Planning"*) and save the files into `OutputDirectory/<name>_<timestamp>/` with matching filename prefixes. Makes recordings easy to identify when uploading to NotebookLM. Specced alongside the Settings dialog.
+
