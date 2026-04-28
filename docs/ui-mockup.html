@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SPRecorder — UI Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f3f3f3;
+    color: #1f1f1f;
+    padding: 32px 48px 240px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; }
+  h1 small { font-weight: 400; color: #666; font-size: 14px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 32px 0 12px; color: #444; }
+  p.note { color: #666; font-size: 13px; margin-bottom: 24px; max-width: 720px; line-height: 1.5; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    max-width: 1100px;
+  }
+  .card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #888;
+    margin-bottom: 16px;
+  }
+
+  /* ----- Tray icon mock ----- */
+  .tray-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #202020;
+    color: #f0f0f0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .tray-icon {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+  }
+  .tray-icon.idle  { background: #555; color: #ccc; }
+  .tray-icon.rec   { background: #c62828; color: white; box-shadow: 0 0 8px #c62828; }
+  .tooltip {
+    background: #2b2b2b;
+    color: #f0f0f0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 12px;
+    margin-top: 8px;
+    display: inline-block;
+  }
+  .tooltip .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; vertical-align: middle; }
+  .tooltip .dot.gray { background:#888; }
+  .tooltip .dot.red  { background:#e53935; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+
+  /* ----- Context menu mock ----- */
+  .menu {
+    background: rgba(252, 252, 252, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+    padding: 4px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    width: 280px;
+    font-size: 13px;
+  }
+  .menu-item {
+    padding: 8px 14px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: default;
+  }
+  .menu-item:hover { background: #e9e9e9; }
+  .menu-item.primary { font-weight: 600; }
+  .menu-item.disabled { color: #999; font-style: italic; padding-top: 2px; padding-bottom: 6px; }
+  .menu-item .kbd { font-family: 'Cascadia Code', Consolas, monospace; font-size: 11px; color: #777; }
+  .menu-sep { height: 1px; background: #e0e0e0; margin: 4px 8px; }
+  .menu-icon { display:inline-block; width:14px; text-align:center; margin-right:8px; }
+
+  /* ----- Toast mock ----- */
+  .toast {
+    background: #2b2b2b;
+    color: #f0f0f0;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    padding: 14px 16px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.4);
+    width: 360px;
+    font-size: 13px;
+  }
+  .toast + .toast { margin-top: 12px; }
+  .toast .head {
+    display:flex; align-items:center; gap:8px;
+    font-weight: 600; margin-bottom: 4px;
+  }
+  .toast .body { color: #cfcfcf; line-height: 1.4; }
+  .toast .path { font-family: 'Cascadia Code', Consolas, monospace; font-size: 11px; color: #9ad29a; word-break: break-all; }
+  .toast.warning .head { color: #ffb74d; }
+  .toast.error   .head { color: #ef5350; }
+  .toast .close { margin-left: auto; opacity: .6; cursor: pointer; }
+
+  /* ----- Fake taskbar at bottom ----- */
+  .taskbar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 48px;
+    background: rgba(32,32,32,.85);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid #404040;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: #f0f0f0;
+    font-size: 12px;
+  }
+  .taskbar .start, .taskbar .app {
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; cursor: pointer; font-size: 16px;
+  }
+  .taskbar .app:hover { background: #ffffff15; }
+  .taskbar .systray {
+    position: absolute;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-right: 16px;
+  }
+  .taskbar .systray .ico { font-size: 14px; opacity: .8; }
+  .taskbar .systray .sprec {
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    display:flex; align-items:center; justify-content:center;
+    font-weight: 700;
+    color: white;
+  }
+  .taskbar .systray .sprec.idle { background:#555; }
+  .taskbar .systray .sprec.rec  { background:#c62828; box-shadow: 0 0 8px #c62828; }
+  .taskbar .clock { color: #f0f0f0; font-size: 12px; line-height: 1.2; text-align: right; }
+
+  .legend {
+    margin-top: 32px;
+    background: #fff8e1;
+    border-left: 3px solid #ffa726;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #5d4037;
+    max-width: 1100px;
+    border-radius: 4px;
+    line-height: 1.5;
+  }
+  code {
+    font-family: 'Cascadia Code', Consolas, monospace;
+    background: #eee;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<h1>SPRecorder <small>— UI mockup (tray-only app, no main window)</small></h1>
+<p class="note">
+  All visible UI lives in the Windows system tray. There is no main window — configuration is via <code>appsettings.json</code>.
+  The mockup shows: (1) the tray icon in two states, (2) the right-click context menu in two states, and (3) the toast notifications the app raises.
+</p>
+
+<div class="grid">
+
+  <!-- IDLE STATE -->
+  <div class="card">
+    <h3>① Tray icon — idle</h3>
+    <div class="tray-row">
+      <div class="tray-icon idle">●</div>
+      <span>Hover to see tooltip ↓</span>
+    </div>
+    <div class="tooltip"><span class="dot gray"></span>SPRecorder — idle</div>
+  </div>
+
+  <!-- RECORDING STATE -->
+  <div class="card">
+    <h3>② Tray icon — recording</h3>
+    <div class="tray-row">
+      <div class="tray-icon rec">●</div>
+      <span>Pulses gently while active</span>
+    </div>
+    <div class="tooltip"><span class="dot red"></span>Recording… 00:02:34</div>
+  </div>
+
+  <!-- CONTEXT MENU IDLE -->
+  <div class="card">
+    <h3>③ Right-click menu — idle</h3>
+    <div class="menu">
+      <div class="menu-item primary">
+        <span><span class="menu-icon">●</span>Start recording</span>
+        <span class="kbd">Ctrl+Alt+R</span>
+      </div>
+      <div class="menu-sep"></div>
+      <div class="menu-item"><span><span class="menu-icon">📂</span>Open recordings folder</span></div>
+      <div class="menu-item"><span><span class="menu-icon">⟳</span>Reload config</span></div>
+      <div class="menu-sep"></div>
+      <div class="menu-item"><span><span class="menu-icon">ⓘ</span>About</span></div>
+      <div class="menu-item"><span><span class="menu-icon">✕</span>Quit</span></div>
+    </div>
+  </div>
+
+  <!-- CONTEXT MENU RECORDING -->
+  <div class="card">
+    <h3>④ Right-click menu — recording</h3>
+    <div class="menu">
+      <div class="menu-item primary">
+        <span><span class="menu-icon" style="color:#c62828">■</span>Stop recording</span>
+        <span class="kbd">Ctrl+Alt+R</span>
+      </div>
+      <div class="menu-item disabled">Recording for 00:02:34 · 1.4 MB</div>
+      <div class="menu-sep"></div>
+      <div class="menu-item"><span><span class="menu-icon">📂</span>Open recordings folder</span></div>
+      <div class="menu-sep"></div>
+      <div class="menu-item"><span><span class="menu-icon">ⓘ</span>About</span></div>
+      <div class="menu-item"><span><span class="menu-icon">✕</span>Quit</span></div>
+    </div>
+  </div>
+
+</div>
+
+<h2>Toast notifications</h2>
+<p class="note">Standard Windows 11 toasts via <code>NotifyIcon.ShowBalloonTip</code>. Shown briefly on key events.</p>
+
+<div class="grid">
+  <div class="card">
+    <h3>⑤ Recording started</h3>
+    <div class="toast">
+      <div class="head"><span style="color:#e53935">●</span> SPRecorder <span class="close">✕</span></div>
+      <div class="body">Recording started — system + microphone</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>⑥ Recording stopped</h3>
+    <div class="toast">
+      <div class="head">✓ Saved 2 files <span class="close">✕</span></div>
+      <div class="body">
+        Duration 12:47 · 11.8 MB total<br>
+        <span class="path">C:\Users\thodsaphon\Documents\SPRecorder\<br>2026-04-27_14-30-22_*.mp3</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>⑦ Hotkey conflict (startup)</h3>
+    <div class="toast warning">
+      <div class="head">⚠ Hotkey conflict <span class="close">✕</span></div>
+      <div class="body">
+        <code>Ctrl+Alt+R</code> is already used by another app.
+        Use the tray menu to start/stop, or change <code>Hotkey</code> in <code>appsettings.json</code>.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>⑧ Mic disconnected mid-recording</h3>
+    <div class="toast warning">
+      <div class="head">⚠ Microphone disconnected <span class="close">✕</span></div>
+      <div class="body">
+        Mic track stopped. System audio is still recording — press hotkey to stop and save.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <strong>Where you'll see it on screen:</strong> the gray/red square at the bottom-right of this page (in the fake taskbar) is exactly where SPRecorder lives in real Windows — next to the network/volume/clock icons. Click it to toggle in/out of "recording" state in this mockup.
+</div>
+
+<!-- Fake Windows 11 taskbar -->
+<div class="taskbar">
+  <div class="start">⊞</div>
+  <div class="app">🔍</div>
+  <div class="app">📁</div>
+  <div class="app">🌐</div>
+  <div class="app">📧</div>
+
+  <div class="systray">
+    <span class="ico">▲</span>
+    <span class="ico">🔊</span>
+    <span class="ico">📶</span>
+    <span class="ico">🔋</span>
+    <div class="sprec idle" id="trayDemo" title="Click to toggle recording state">●</div>
+    <div class="clock">14:32<br>2026-04-27</div>
+  </div>
+</div>
+
+<script>
+  // Click the tray icon at bottom to toggle states (purely demo)
+  const t = document.getElementById('trayDemo');
+  t.addEventListener('click', () => {
+    if (t.classList.contains('idle')) {
+      t.classList.remove('idle'); t.classList.add('rec');
+      t.title = 'Recording… (click to stop)';
+    } else {
+      t.classList.remove('rec'); t.classList.add('idle');
+      t.title = 'SPRecorder — idle (click to start)';
+    }
+  });
+</script>
+</body>
+</html>
