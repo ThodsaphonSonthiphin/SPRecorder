@@ -62,8 +62,11 @@ internal sealed class SettingsForm : Form
         tabs.TabPages.Add(BuildAudioTab());
         tabs.TabPages.Add(BuildMixedTab());
 
-        Controls.Add(tabs);
+        // Order matters: Bottom-docked controls must be added BEFORE Fill,
+        // otherwise the Fill control claims the entire ClientArea and the
+        // footer ends up with zero width.
         Controls.Add(footer);
+        Controls.Add(tabs);
 
         ApplyConfigToControls(_initial);
     }
@@ -303,18 +306,15 @@ internal sealed class SettingsForm : Form
 
         const int btnW = 110;
         const int btnH = 34;
-        const int btnGap = 10;
-        const int rightMargin = 24;
 
         var save = new Button
         {
             Text = "Save",
             Size = new Size(btnW, btnH),
-            Location = new Point(FormWidth - rightMargin - btnW, (FooterHeight - btnH) / 2),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
             BackColor = Color.FromArgb(0, 120, 212),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
+            Margin = new Padding(0, 0, 0, 0),
         };
         save.FlatAppearance.BorderColor = Color.FromArgb(0, 120, 212);
         save.Click += Save_Click;
@@ -323,13 +323,23 @@ internal sealed class SettingsForm : Form
         {
             Text = "Cancel",
             Size = new Size(btnW, btnH),
-            Location = new Point(FormWidth - rightMargin - btnW * 2 - btnGap, (FooterHeight - btnH) / 2),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Margin = new Padding(10, 0, 0, 0),
         };
         cancel.Click += (_, _) => { Result = null; Close(); };
 
-        panel.Controls.Add(save);
-        panel.Controls.Add(cancel);
+        // FlowLayoutPanel right-to-left auto-positions buttons against the right edge,
+        // immune to whatever width the parent panel ends up with.
+        var flow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Padding = new Padding(0, (FooterHeight - btnH) / 2, 24, 0),
+        };
+        flow.Controls.Add(save);    // rightmost
+        flow.Controls.Add(cancel);  // to the left of Save
+
+        panel.Controls.Add(flow);
         AcceptButton = save;
         CancelButton = cancel;
         return panel;
