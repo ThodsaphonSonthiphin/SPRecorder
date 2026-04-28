@@ -15,15 +15,33 @@ public static class Mp3Mixer
         var sys = ToMonoResampled(sysReader.ToSampleProvider(), sampleRate);
         var mic = ToMonoResampled(micReader.ToSampleProvider(), sampleRate);
 
-        // Halve each input so the sum can't clip when both peak together.
         var mixer = new MixingSampleProvider(new[]
         {
             new VolumeSampleProvider(sys) { Volume = 0.5f },
             new VolumeSampleProvider(mic) { Volume = 0.5f },
         });
 
-        var pcm = new SampleToWaveProvider16(mixer);
-        using var writer = new LameMP3FileWriter(outputMp3, pcm.WaveFormat, bitrateKbps);
+        WriteMp3(mixer, outputMp3, bitrateKbps);
+    }
+
+    public static void MixToStereo(string systemMp3, string micMp3, string outputMp3,
+        int bitrateKbps, int sampleRate = 44100)
+    {
+        using var sysReader = new Mp3FileReader(systemMp3);
+        using var micReader = new Mp3FileReader(micMp3);
+
+        var sys = ToMonoResampled(sysReader.ToSampleProvider(), sampleRate);
+        var mic = ToMonoResampled(micReader.ToSampleProvider(), sampleRate);
+
+        var stereo = new MultiplexingSampleProvider(new ISampleProvider[] { sys, mic }, 2);
+
+        WriteMp3(stereo, outputMp3, bitrateKbps);
+    }
+
+    private static void WriteMp3(ISampleProvider source, string path, int bitrateKbps)
+    {
+        var pcm = new SampleToWaveProvider16(source);
+        using var writer = new LameMP3FileWriter(path, pcm.WaveFormat, bitrateKbps);
 
         var buf = new byte[pcm.WaveFormat.AverageBytesPerSecond];
         int read;

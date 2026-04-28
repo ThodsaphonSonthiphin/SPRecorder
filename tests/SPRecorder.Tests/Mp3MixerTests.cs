@@ -40,6 +40,33 @@ public class Mp3MixerTests
     private static string TempPath(string label) =>
         Path.Combine(Path.GetTempPath(), $"sprecorder_mix_{label}_{Guid.NewGuid():N}.mp3");
 
+    [Fact]
+    public void MixToStereo_ProducesStereoMp3()
+    {
+        var sysPath   = TempPath("sys");
+        var micPath   = TempPath("mic");
+        var mixedPath = TempPath("mixed");
+
+        try
+        {
+            WriteSineMp3(sysPath, freq: 440f, sampleRate: 44100, channels: 1);
+            WriteSineMp3(micPath, freq: 880f, sampleRate: 44100, channels: 1);
+
+            // Use 128 kbps so LAME doesn't auto-downsample for stereo
+            Mp3Mixer.MixToStereo(sysPath, micPath, mixedPath, bitrateKbps: 128, sampleRate: 44100);
+
+            using var reader = new Mp3FileReader(mixedPath);
+            Assert.Equal(2, reader.WaveFormat.Channels);
+            Assert.Equal(44100, reader.WaveFormat.SampleRate);
+            Assert.True(reader.TotalTime.TotalSeconds > 0.5);
+        }
+        finally
+        {
+            foreach (var p in new[] { sysPath, micPath, mixedPath })
+                if (File.Exists(p)) File.Delete(p);
+        }
+    }
+
     private static void WriteSineMp3(string path, float freq, int sampleRate, int channels)
     {
         var fmt = new WaveFormat(sampleRate, 16, channels);

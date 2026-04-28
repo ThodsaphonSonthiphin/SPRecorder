@@ -9,6 +9,15 @@ public sealed record AppConfig
     public string Hotkey { get; init; } = "Ctrl+Alt+R";
     public int Mp3BitrateKbps { get; init; } = 96;
 
+    public string MicrophoneDeviceId  { get; init; } = "";
+    public string SystemAudioDeviceId { get; init; } = "";
+
+    public bool   MixedFileEnabled    { get; init; } = true;
+    public string MixedFileFormat     { get; init; } = "Mono";
+    public int    MixedFileSampleRate { get; init; } = 44100;
+
+    public bool PromptForSessionName { get; init; } = false;
+
     public static AppConfig Load(IConfiguration cfg)
     {
         var raw = cfg.Get<AppConfig>() ?? new AppConfig();

@@ -1,6 +1,7 @@
 using NAudio.Wave;
 using SPRecorder.Audio;
 using SPRecorder.Configuration;
+using SPRecorder.Settings;
 
 namespace SPRecorder.Recording;
 
@@ -8,7 +9,9 @@ public sealed class RecordingSession : IDisposable
 {
     public enum State { Idle, Recording }
 
-    private readonly AppConfig _config;
+    private readonly Func<AppConfig> _configGetter;
+    private readonly Func<string?>? _sessionNamePrompt;
+    private AppConfig _activeConfig = new();
     private SystemAudioCapture? _systemCapture;
     private MicrophoneCapture? _micCapture;
     private Mp3StreamWriter? _systemWriter;
@@ -24,9 +27,13 @@ public sealed class RecordingSession : IDisposable
     public event Action<State>? StateChanged;
     public event Action<string>? Warning;
     public event Action? MixingStarted;
-    public event Action<string?>? MixingCompleted; // path on success, null on failure
+    public event Action<string?>? MixingCompleted;
 
-    public RecordingSession(AppConfig config) => _config = config;
+    public RecordingSession(Func<AppConfig> configGetter, Func<string?>? sessionNamePrompt = null)
+    {
+        _configGetter = configGetter;
+        _sessionNamePrompt = sessionNamePrompt;
+    }
 
     public void Toggle()
     {
@@ -38,19 +45,21 @@ public sealed class RecordingSession : IDisposable
     {
         if (CurrentState != State.Idle) return;
 
-        Directory.CreateDirectory(_config.OutputDirectory);
+        _activeConfig = _configGetter();
+        Directory.CreateDirectory(_activeConfig.OutputDirectory);
         _startedAt = DateTime.Now;
-        SystemFilePath = Path.Combine(_config.OutputDirectory,
-            FileNameBuilder.Build(_config.FileNamePattern, _startedAt, "system"));
-        MicFilePath = Path.Combine(_config.OutputDirectory,
-            FileNameBuilder.Build(_config.FileNamePattern, _startedAt, "mic"));
-        MixedFilePath = Path.Combine(_config.OutputDirectory,
-            FileNameBuilder.Build(_config.FileNamePattern, _startedAt, "mixed"));
 
-        _systemCapture = new SystemAudioCapture();
-        _micCapture = new MicrophoneCapture();
-        _systemWriter = new Mp3StreamWriter(SystemFilePath, _systemCapture.WaveFormat, _config.Mp3BitrateKbps);
-        _micWriter    = new Mp3StreamWriter(MicFilePath,    _micCapture.WaveFormat,    _config.Mp3BitrateKbps);
+        SystemFilePath = Path.Combine(_activeConfig.OutputDirectory,
+            FileNameBuilder.Build(_activeConfig.FileNamePattern, _startedAt, "system"));
+        MicFilePath = Path.Combine(_activeConfig.OutputDirectory,
+            FileNameBuilder.Build(_activeConfig.FileNamePattern, _startedAt, "mic"));
+        MixedFilePath = Path.Combine(_activeConfig.OutputDirectory,
+            FileNameBuilder.Build(_activeConfig.FileNamePattern, _startedAt, "mixed"));
+
+        _systemCapture = new SystemAudioCapture(_activeConfig.SystemAudioDeviceId);
+        _micCapture = new MicrophoneCapture(_activeConfig.MicrophoneDeviceId);
+        _systemWriter = new Mp3StreamWriter(SystemFilePath, _systemCapture.WaveFormat, _activeConfig.Mp3BitrateKbps);
+        _micWriter    = new Mp3StreamWriter(MicFilePath,    _micCapture.WaveFormat,    _activeConfig.Mp3BitrateKbps);
 
         _systemCapture.DataAvailable    += OnSystemData;
         _micCapture.DataAvailable       += OnMicData;
@@ -92,7 +101,43 @@ public sealed class RecordingSession : IDisposable
         CurrentState = State.Idle;
         StateChanged?.Invoke(CurrentState);
 
-        StartMixingInBackground();
+        if (_activeConfig.PromptForSessionName)
+            TryRenameToSessionFolder();
+
+        if (_activeConfig.MixedFileEnabled)
+            StartMixingInBackground();
+    }
+
+    private void TryRenameToSessionFolder()
+    {
+        if (_sessionNamePrompt is null) return;
+        if (SystemFilePath is null || MicFilePath is null || MixedFilePath is null) return;
+
+        var rawName = _sessionNamePrompt();
+        var clean = SessionNamePrompt.Sanitize(rawName ?? "");
+        if (string.IsNullOrEmpty(clean)) return;
+
+        var folderName = $"{clean}_{_startedAt:yyyy-MM-dd_HH-mm-ss}";
+        var folder = Path.Combine(_activeConfig.OutputDirectory, folderName);
+        try
+        {
+            Directory.CreateDirectory(folder);
+
+            var newSystem = Path.Combine(folder, $"{folderName}_system.mp3");
+            var newMic    = Path.Combine(folder, $"{folderName}_mic.mp3");
+            var newMixed  = Path.Combine(folder, $"{folderName}_mixed.mp3");
+
+            if (File.Exists(SystemFilePath)) File.Move(SystemFilePath, newSystem);
+            if (File.Exists(MicFilePath))    File.Move(MicFilePath,    newMic);
+
+            SystemFilePath = newSystem;
+            MicFilePath    = newMic;
+            MixedFilePath  = newMixed;
+        }
+        catch (Exception ex)
+        {
+            Warning?.Invoke("Could not rename to session folder: " + ex.Message);
+        }
     }
 
     private void StartMixingInBackground()
@@ -100,7 +145,10 @@ public sealed class RecordingSession : IDisposable
         var sysPath = SystemFilePath;
         var micPath = MicFilePath;
         var mixedPath = MixedFilePath;
-        var bitrate = _config.Mp3BitrateKbps;
+        var bitrate = _activeConfig.Mp3BitrateKbps;
+        var sampleRate = _activeConfig.MixedFileSampleRate;
+        var stereo = _activeConfig.MixedFileFormat.Equals("Stereo", StringComparison.OrdinalIgnoreCase);
+
         if (sysPath is null || micPath is null || mixedPath is null) return;
         if (!File.Exists(sysPath) || !File.Exists(micPath)) return;
 
@@ -109,7 +157,10 @@ public sealed class RecordingSession : IDisposable
         {
             try
             {
-                Mp3Mixer.MixToMono(sysPath, micPath, mixedPath, bitrate);
+                if (stereo)
+                    Mp3Mixer.MixToStereo(sysPath, micPath, mixedPath, bitrate, sampleRate);
+                else
+                    Mp3Mixer.MixToMono(sysPath, micPath, mixedPath, bitrate, sampleRate);
                 MixingCompleted?.Invoke(mixedPath);
             }
             catch (Exception ex)

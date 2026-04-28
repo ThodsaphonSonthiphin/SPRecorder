@@ -11,11 +11,19 @@ public sealed class MicrophoneCapture : IDisposable
     public event EventHandler<WaveInEventArgs>? DataAvailable;
     public event EventHandler<StoppedEventArgs>? RecordingStopped;
 
-    public MicrophoneCapture()
+    public MicrophoneCapture(string deviceId = "")
     {
-        _capture = new WasapiCapture();
+        var device = ResolveDevice(deviceId);
+        _capture = device is null ? new WasapiCapture() : new WasapiCapture(device);
         _capture.DataAvailable    += (s, e) => DataAvailable?.Invoke(s, e);
         _capture.RecordingStopped += (s, e) => RecordingStopped?.Invoke(s, e);
+    }
+
+    private static MMDevice? ResolveDevice(string deviceId)
+    {
+        if (string.IsNullOrEmpty(deviceId)) return null;
+        using var enumerator = new MMDeviceEnumerator();
+        try { return enumerator.GetDevice(deviceId); } catch { return null; }
     }
 
     public void Start() => _capture.StartRecording();

@@ -21,4 +21,8 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="SPRecorder.Tests" />
+  </ItemGroup>
+
 </Project>
