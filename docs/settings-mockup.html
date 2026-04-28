@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SPRecorder — Settings UI mockups</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f0f0f0;
+    color: #1f1f1f;
+    padding: 32px;
+  }
+  h1 { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+  .subtitle { color: #666; font-size: 13px; margin-bottom: 24px; }
+
+  .switcher {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .switcher button {
+    background: white;
+    border: 1px solid #d0d0d0;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    color: #333;
+  }
+  .switcher button.active {
+    background: #0078d4;
+    color: white;
+    border-color: #0078d4;
+  }
+  .switcher button:not(.active):hover { background: #f5f5f5; }
+
+  .stage {
+    background: #d8d8d8;
+    padding: 36px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 600px;
+  }
+
+  /* ----- Windows 11-style settings window ----- */
+  .window {
+    background: #fafafa;
+    border: 1px solid #c8c8c8;
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.18);
+    overflow: hidden;
+    width: 480px;
+  }
+  .window.large { width: 560px; }
+
+  .titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f0f0f0;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .titlebar .controls { display: flex; gap: 4px; color: #666; }
+  .titlebar .controls span {
+    width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; font-family: 'Cascadia Code', monospace; font-size: 11px;
+    cursor: pointer;
+  }
+  .titlebar .controls span:hover { background: #e6e6e6; }
+  .titlebar .controls .x:hover { background: #c42b1c; color: white; }
+
+  .tabs {
+    display: flex;
+    background: #f6f6f6;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  .tab {
+    padding: 10px 20px;
+    font-size: 13px;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab.active {
+    color: #0078d4;
+    border-bottom-color: #0078d4;
+    font-weight: 500;
+    background: white;
+  }
+
+  .body {
+    padding: 22px 24px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: #888;
+    margin: 14px 0 10px;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block;
+    font-size: 13px;
+    color: #333;
+    margin-bottom: 5px;
+  }
+  .field .hint {
+    color: #888;
+    font-size: 11px;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  .input, .select {
+    width: 100%;
+    background: white;
+    border: 1px solid #c8c8c8;
+    border-radius: 4px;
+    padding: 7px 10px;
+    font: inherit;
+    font-size: 13px;
+    color: #1f1f1f;
+  }
+  .input:focus, .select:focus { outline: 2px solid #0078d4; outline-offset: -1px; }
+
+  .row { display: flex; gap: 8px; align-items: stretch; }
+  .row .input { flex: 1; }
+  .btn-mini {
+    background: white;
+    border: 1px solid #c8c8c8;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .btn-mini:hover { background: #f0f0f0; }
+
+  .hotkey-capture {
+    background: white;
+    border: 1px solid #c8c8c8;
+    border-radius: 4px;
+    padding: 7px 12px;
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-size: 13px;
+    color: #1f1f1f;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .hotkey-capture .badge {
+    background: #e6f1fb;
+    color: #0078d4;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  .check {
+    display: flex; align-items: center; gap: 8px; font-size: 13px; color: #333;
+    margin-bottom: 8px; cursor: pointer;
+  }
+  .check input { width: 16px; height: 16px; accent-color: #0078d4; }
+
+  .radio { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #333; }
+  .radio input { accent-color: #0078d4; }
+  .radio-group { display: flex; gap: 22px; padding: 4px 2px; }
+
+  .footer {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 14px 22px;
+    border-top: 1px solid #e8e8e8;
+    background: #f6f6f6;
+  }
+  .btn {
+    padding: 8px 22px;
+    font: inherit;
+    font-size: 13px;
+    border-radius: 4px;
+    border: 1px solid #c8c8c8;
+    background: white;
+    cursor: pointer;
+    min-width: 90px;
+  }
+  .btn:hover { background: #f0f0f0; }
+  .btn.primary {
+    background: #0078d4;
+    color: white;
+    border-color: #0078d4;
+  }
+  .btn.primary:hover { background: #106ebe; }
+
+  .field-count {
+    text-align: center;
+    font-size: 12px;
+    color: #666;
+    margin-top: 16px;
+  }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<h1>SPRecorder — Settings UI mockups</h1>
+<p class="subtitle">Click a button below to compare the four scope options. Each shows what the "Settings…" window from the tray menu would look like.</p>
+
+<div class="switcher">
+  <button class="active" data-target="opt1">① 4 fields only</button>
+  <button data-target="opt2">② + Mixed options</button>
+  <button data-target="opt3">③ + Audio devices</button>
+  <button data-target="opt4">④ Full (tabs)</button>
+</div>
+
+<div class="stage">
+
+  <!-- =================== OPTION 1: 4 fields only =================== -->
+  <div class="window opt opt1">
+    <div class="titlebar">
+      <span>SPRecorder — Settings</span>
+      <div class="controls"><span>−</span><span>▢</span><span class="x">✕</span></div>
+    </div>
+    <div class="body">
+      <div class="field">
+        <label>Output directory</label>
+        <div class="row">
+          <input class="input" value="C:\Users\thodsaphon\Documents\SPRecorder">
+          <button class="btn-mini">Browse…</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>File name pattern</label>
+        <input class="input" value="{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3">
+        <div class="hint">Tokens: {timestamp:format}, {track}. Track is one of: system, mic, mixed.</div>
+      </div>
+      <div class="field">
+        <label>Global hotkey</label>
+        <div class="hotkey-capture">
+          <span>Ctrl + Alt + R</span>
+          <span class="badge">click to change</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>MP3 bitrate</label>
+        <select class="select">
+          <option>64 kbps (smallest)</option>
+          <option selected>96 kbps (recommended for voice)</option>
+          <option>128 kbps</option>
+          <option>192 kbps (high quality)</option>
+        </select>
+      </div>
+    </div>
+    <div class="footer">
+      <button class="btn">Cancel</button>
+      <button class="btn primary">Save</button>
+    </div>
+  </div>
+
+  <!-- =================== OPTION 2: + Mixed options =================== -->
+  <div class="window opt opt2 hidden">
+    <div class="titlebar">
+      <span>SPRecorder — Settings</span>
+      <div class="controls"><span>−</span><span>▢</span><span class="x">✕</span></div>
+    </div>
+    <div class="body">
+      <div class="section-title">General</div>
+      <div class="field">
+        <label>Output directory</label>
+        <div class="row">
+          <input class="input" value="C:\Users\thodsaphon\Documents\SPRecorder">
+          <button class="btn-mini">Browse…</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>File name pattern</label>
+        <input class="input" value="{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3">
+      </div>
+      <div class="field">
+        <label>Global hotkey</label>
+        <div class="hotkey-capture"><span>Ctrl + Alt + R</span><span class="badge">click to change</span></div>
+      </div>
+      <div class="field">
+        <label>MP3 bitrate</label>
+        <select class="select">
+          <option>64 kbps</option>
+          <option selected>96 kbps (recommended)</option>
+          <option>128 kbps</option>
+          <option>192 kbps</option>
+        </select>
+      </div>
+
+      <div class="section-title">Mixed file (for AI summary)</div>
+      <label class="check"><input type="checkbox" checked> Generate mixed file after each recording</label>
+      <div class="field" style="margin-top:10px;">
+        <label>Format</label>
+        <div class="radio-group">
+          <label class="radio"><input type="radio" name="fmt" checked> Mono (recommended for AI)</label>
+          <label class="radio"><input type="radio" name="fmt"> Stereo (L=system, R=mic)</label>
+        </div>
+      </div>
+      <div class="field">
+        <label>Target sample rate</label>
+        <select class="select">
+          <option>22 050 Hz (smallest)</option>
+          <option selected>44 100 Hz (recommended)</option>
+          <option>48 000 Hz</option>
+        </select>
+      </div>
+    </div>
+    <div class="footer">
+      <button class="btn">Cancel</button>
+      <button class="btn primary">Save</button>
+    </div>
+  </div>
+
+  <!-- =================== OPTION 3: + Audio devices =================== -->
+  <div class="window opt opt3 hidden">
+    <div class="titlebar">
+      <span>SPRecorder — Settings</span>
+      <div class="controls"><span>−</span><span>▢</span><span class="x">✕</span></div>
+    </div>
+    <div class="body">
+      <div class="section-title">General</div>
+      <div class="field">
+        <label>Output directory</label>
+        <div class="row">
+          <input class="input" value="C:\Users\thodsaphon\Documents\SPRecorder">
+          <button class="btn-mini">Browse…</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>File name pattern</label>
+        <input class="input" value="{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3">
+      </div>
+      <div class="field">
+        <label>Global hotkey</label>
+        <div class="hotkey-capture"><span>Ctrl + Alt + R</span><span class="badge">click to change</span></div>
+      </div>
+      <div class="field">
+        <label>MP3 bitrate</label>
+        <select class="select">
+          <option>64 kbps</option>
+          <option selected>96 kbps (recommended)</option>
+          <option>128 kbps</option>
+          <option>192 kbps</option>
+        </select>
+      </div>
+
+      <div class="section-title">Audio devices</div>
+      <div class="field">
+        <label>Microphone</label>
+        <select class="select">
+          <option selected>Default — Headset Microphone (Jabra Evolve 75)</option>
+          <option>Microphone Array (Realtek Audio)</option>
+          <option>External USB Mic</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>System audio (loopback)</label>
+        <select class="select">
+          <option selected>Default — Speakers (Jabra Evolve 75)</option>
+          <option>Speakers (Realtek Audio)</option>
+          <option>Headphones (Sennheiser)</option>
+        </select>
+      </div>
+      <button class="btn-mini" style="margin-top:4px;">↻ Refresh device list</button>
+    </div>
+    <div class="footer">
+      <button class="btn">Cancel</button>
+      <button class="btn primary">Save</button>
+    </div>
+  </div>
+
+  <!-- =================== OPTION 4: Full with tabs =================== -->
+  <div class="window large opt opt4 hidden">
+    <div class="titlebar">
+      <span>SPRecorder — Settings</span>
+      <div class="controls"><span>−</span><span>▢</span><span class="x">✕</span></div>
+    </div>
+    <div class="tabs">
+      <div class="tab active" data-tab="general">General</div>
+      <div class="tab" data-tab="audio">Audio</div>
+      <div class="tab" data-tab="mixed">Mixed file</div>
+    </div>
+    <div class="body" data-pane="general">
+      <div class="field">
+        <label>Output directory</label>
+        <div class="row">
+          <input class="input" value="C:\Users\thodsaphon\Documents\SPRecorder">
+          <button class="btn-mini">Browse…</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>File name pattern</label>
+        <input class="input" value="{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3">
+        <div class="hint">Tokens: {timestamp:format}, {track}.</div>
+      </div>
+      <div class="field">
+        <label>Global hotkey</label>
+        <div class="hotkey-capture"><span>Ctrl + Alt + R</span><span class="badge">click to change</span></div>
+      </div>
+      <div class="field">
+        <label>MP3 bitrate</label>
+        <select class="select">
+          <option>64 kbps</option>
+          <option selected>96 kbps (recommended)</option>
+          <option>128 kbps</option>
+          <option>192 kbps</option>
+        </select>
+      </div>
+    </div>
+    <div class="body hidden" data-pane="audio">
+      <div class="field">
+        <label>Microphone</label>
+        <select class="select">
+          <option selected>Default — Headset Microphone (Jabra Evolve 75)</option>
+          <option>Microphone Array (Realtek Audio)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>System audio (loopback)</label>
+        <select class="select">
+          <option selected>Default — Speakers (Jabra Evolve 75)</option>
+          <option>Speakers (Realtek Audio)</option>
+        </select>
+      </div>
+      <button class="btn-mini" style="margin-top:4px;">↻ Refresh device list</button>
+    </div>
+    <div class="body hidden" data-pane="mixed">
+      <label class="check"><input type="checkbox" checked> Generate mixed file after each recording</label>
+      <div class="field" style="margin-top:10px;">
+        <label>Format</label>
+        <div class="radio-group">
+          <label class="radio"><input type="radio" name="fmt2" checked> Mono (recommended for AI)</label>
+          <label class="radio"><input type="radio" name="fmt2"> Stereo (L=system, R=mic)</label>
+        </div>
+      </div>
+      <div class="field">
+        <label>Target sample rate</label>
+        <select class="select">
+          <option>22 050 Hz</option>
+          <option selected>44 100 Hz (recommended)</option>
+          <option>48 000 Hz</option>
+        </select>
+      </div>
+    </div>
+    <div class="footer">
+      <button class="btn">Cancel</button>
+      <button class="btn primary">Save</button>
+    </div>
+  </div>
+
+</div>
+
+<p class="field-count" id="fieldCount">Option 1 — 4 fields, single panel, ~360 px tall</p>
+
+<script>
+  const counts = {
+    opt1: '4 fields, single panel, ~360 px tall',
+    opt2: '7 fields with mixed-file section, ~520 px tall',
+    opt3: '6 fields with device pickers, ~480 px tall',
+    opt4: '9 fields across 3 tabs (General / Audio / Mixed), ~440 px tall',
+  };
+
+  document.querySelectorAll('.switcher button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.switcher button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.opt').forEach(o => o.classList.add('hidden'));
+      document.querySelector('.' + btn.dataset.target).classList.remove('hidden');
+      document.getElementById('fieldCount').textContent =
+        btn.textContent.trim() + ' — ' + counts[btn.dataset.target];
+    });
+  });
+
+  // Tab switching inside option 4
+  document.querySelectorAll('.opt4 .tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.opt4 .tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      document.querySelectorAll('.opt4 [data-pane]').forEach(p => p.classList.add('hidden'));
+      document.querySelector('.opt4 [data-pane="' + tab.dataset.tab + '"]').classList.remove('hidden');
+    });
+  });
+</script>
+</body>
+</html>
