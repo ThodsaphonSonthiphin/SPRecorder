@@ -7,6 +7,15 @@ namespace SPRecorder.Settings;
 
 internal sealed class SettingsForm : Form
 {
+    private const int TabPad = 28;
+    private const int FieldGap = 18;
+    private const int LabelToInput = 6;
+    private const int InputHeight = 28;
+    private const int InputWidth = 600;
+    private const int FormWidth = 720;
+    private const int FormHeight = 640;
+    private const int FooterHeight = 76;
+
     private readonly AppConfig _initial;
     private readonly bool _isRecording;
 
@@ -39,19 +48,21 @@ internal sealed class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         ShowInTaskbar = false;
-        ClientSize = new Size(560, 440);
+        Font = SystemFonts.MessageBoxFont;
+        ClientSize = new Size(FormWidth, FormHeight);
 
+        var footer = BuildFooter();
         var tabs = new TabControl
         {
-            Dock = DockStyle.Top,
-            Height = ClientSize.Height - 60,
+            Dock = DockStyle.Fill,
+            Padding = new Point(14, 8),
         };
         tabs.TabPages.Add(BuildGeneralTab());
         tabs.TabPages.Add(BuildAudioTab());
         tabs.TabPages.Add(BuildMixedTab());
 
         Controls.Add(tabs);
-        Controls.Add(BuildFooter());
+        Controls.Add(footer);
 
         ApplyConfigToControls(_initial);
     }
@@ -59,17 +70,24 @@ internal sealed class SettingsForm : Form
     // ---------- General tab ----------
     private TabPage BuildGeneralTab()
     {
-        var page = new TabPage("General") { Padding = new Padding(16) };
+        var page = new TabPage("General") { Padding = new Padding(TabPad) };
+        var y = TabPad;
 
-        var y = 12;
-        page.Controls.Add(MakeLabel("Output directory", 16, y));
-        y += 22;
-        _outputDir = new TextBox { Location = new Point(16, y), Size = new Size(420, 24) };
+        // Output directory
+        page.Controls.Add(MakeLabel("Output directory", TabPad, y));
+        y += 22 + LabelToInput;
+        const int browseWidth = 110;
+        const int browseGap = 8;
+        _outputDir = new TextBox
+        {
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth - browseWidth - browseGap, InputHeight),
+        };
         var browse = new Button
         {
             Text = "Browse…",
-            Location = new Point(442, y - 1),
-            Size = new Size(80, 26),
+            Location = new Point(TabPad + InputWidth - browseWidth, y - 1),
+            Size = new Size(browseWidth, InputHeight + 2),
         };
         browse.Click += (_, _) =>
         {
@@ -79,55 +97,62 @@ internal sealed class SettingsForm : Form
         };
         page.Controls.Add(_outputDir);
         page.Controls.Add(browse);
+        y += InputHeight + FieldGap;
 
-        y += 36;
-        page.Controls.Add(MakeLabel("File name pattern", 16, y));
-        y += 22;
-        _fileNamePattern = new TextBox { Location = new Point(16, y), Size = new Size(506, 24) };
+        // File name pattern
+        page.Controls.Add(MakeLabel("File name pattern", TabPad, y));
+        y += 22 + LabelToInput;
+        _fileNamePattern = new TextBox
+        {
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, InputHeight),
+        };
         page.Controls.Add(_fileNamePattern);
-        y += 28;
-        page.Controls.Add(MakeHint("Tokens: {timestamp:format}, {track}. {track} = system | mic | mixed.", 16, y));
+        y += InputHeight + 4;
+        page.Controls.Add(MakeHint("Tokens: {timestamp:format}, {track}.   {track} = system | mic | mixed.", TabPad, y));
+        y += 18 + FieldGap;
 
-        y += 28;
-        page.Controls.Add(MakeLabel("Global hotkey", 16, y));
-        y += 22;
+        // Hotkey
+        page.Controls.Add(MakeLabel("Global hotkey", TabPad, y));
+        y += 22 + LabelToInput;
         _hotkey = new HotkeyCaptureControl
         {
-            Location = new Point(16, y),
-            Size = new Size(506, 50),
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, 56),
         };
         page.Controls.Add(_hotkey);
+        y += 56 + FieldGap;
 
-        y += 60;
-        page.Controls.Add(MakeLabel("MP3 bitrate", 16, y));
-        y += 22;
+        // MP3 bitrate
+        page.Controls.Add(MakeLabel("MP3 bitrate", TabPad, y));
+        y += 22 + LabelToInput;
         _bitrate = new ComboBox
         {
-            Location = new Point(16, y),
-            Size = new Size(220, 24),
+            Location = new Point(TabPad, y),
+            Size = new Size(320, InputHeight),
             DropDownStyle = ComboBoxStyle.DropDownList,
         };
         _bitrate.Items.AddRange(new object[]
         {
-            new BitrateOption(64, "64 kbps (smallest)"),
-            new BitrateOption(96, "96 kbps (recommended for voice)"),
+            new BitrateOption(64,  "64 kbps (smallest)"),
+            new BitrateOption(96,  "96 kbps (recommended for voice)"),
             new BitrateOption(128, "128 kbps"),
             new BitrateOption(192, "192 kbps (high quality)"),
         });
         _bitrate.DisplayMember = nameof(BitrateOption.Display);
-
         page.Controls.Add(_bitrate);
+        y += InputHeight + FieldGap + 4;
 
-        y += 36;
+        // Prompt-for-name checkbox
         _promptForName = new CheckBox
         {
             Text = "Ask for session name after recording",
-            Location = new Point(16, y),
-            Size = new Size(400, 22),
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, 24),
         };
         page.Controls.Add(_promptForName);
-        y += 22;
-        page.Controls.Add(MakeHint("Saves files in OutputDirectory/<your-name>_<timestamp>/", 36, y));
+        y += 24 + 2;
+        page.Controls.Add(MakeHint("Saves files in OutputDirectory/<your-name>_<timestamp>/", TabPad + 22, y));
 
         return page;
     }
@@ -135,48 +160,48 @@ internal sealed class SettingsForm : Form
     // ---------- Audio tab ----------
     private TabPage BuildAudioTab()
     {
-        var page = new TabPage("Audio") { Padding = new Padding(16) };
-        var y = 12;
+        var page = new TabPage("Audio") { Padding = new Padding(TabPad) };
+        var y = TabPad;
 
-        page.Controls.Add(MakeLabel("Microphone", 16, y));
-        y += 22;
+        page.Controls.Add(MakeLabel("Microphone", TabPad, y));
+        y += 22 + LabelToInput;
         _micDevice = new ComboBox
         {
-            Location = new Point(16, y),
-            Size = new Size(506, 24),
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, InputHeight),
             DropDownStyle = ComboBoxStyle.DropDownList,
             DisplayMember = nameof(DeviceOption.Display),
         };
         page.Controls.Add(_micDevice);
+        y += InputHeight + FieldGap;
 
-        y += 36;
-        page.Controls.Add(MakeLabel("System audio (loopback)", 16, y));
-        y += 22;
+        page.Controls.Add(MakeLabel("System audio (loopback)", TabPad, y));
+        y += 22 + LabelToInput;
         _renderDevice = new ComboBox
         {
-            Location = new Point(16, y),
-            Size = new Size(506, 24),
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, InputHeight),
             DropDownStyle = ComboBoxStyle.DropDownList,
             DisplayMember = nameof(DeviceOption.Display),
         };
         page.Controls.Add(_renderDevice);
+        y += InputHeight + FieldGap;
 
-        y += 36;
         var refresh = new Button
         {
             Text = "↻ Refresh device list",
-            Location = new Point(16, y),
-            Size = new Size(180, 28),
+            Location = new Point(TabPad, y),
+            Size = new Size(220, 32),
         };
         refresh.Click += (_, _) => PopulateAudioDevices();
         page.Controls.Add(refresh);
+        y += 32 + FieldGap;
 
-        y += 40;
         _audioRecordingHint = new Label
         {
-            Text = "⚠ Stop recording to change devices.",
-            Location = new Point(16, y),
-            Size = new Size(506, 22),
+            Text = "⚠  Stop recording to change devices.",
+            Location = new Point(TabPad, y),
+            AutoSize = true,
             ForeColor = Color.DarkOrange,
             Visible = _isRecording,
         };
@@ -195,13 +220,13 @@ internal sealed class SettingsForm : Form
     // ---------- Mixed tab ----------
     private TabPage BuildMixedTab()
     {
-        var page = new TabPage("Mixed file") { Padding = new Padding(16) };
+        var page = new TabPage("Mixed file") { Padding = new Padding(TabPad) };
 
         _mixedEnabled = new CheckBox
         {
             Text = "Generate mixed file after each recording",
-            Location = new Point(16, 16),
-            Size = new Size(400, 22),
+            Location = new Point(TabPad, TabPad),
+            Size = new Size(InputWidth, 24),
         };
         _mixedEnabled.CheckedChanged += (_, _) => _mixedDetails.Enabled = _mixedEnabled.Checked;
         page.Controls.Add(_mixedEnabled);
@@ -209,37 +234,37 @@ internal sealed class SettingsForm : Form
         _mixedDetails = new GroupBox
         {
             Text = "Mixed file options",
-            Location = new Point(16, 48),
-            Size = new Size(506, 200),
+            Location = new Point(TabPad, TabPad + 36),
+            Size = new Size(InputWidth, 240),
         };
         page.Controls.Add(_mixedDetails);
 
-        var y = 26;
-        _mixedDetails.Controls.Add(MakeLabel("Format", 16, y));
-        y += 22;
+        var gy = 32;
+        _mixedDetails.Controls.Add(MakeLabel("Format", 20, gy));
+        gy += 22 + 2;
         _mixedMono = new RadioButton
         {
-            Text = "Mono (recommended for AI)",
-            Location = new Point(20, y),
-            Size = new Size(280, 22),
+            Text = "Mono (recommended for AI summarization)",
+            Location = new Point(28, gy),
+            Size = new Size(InputWidth - 60, 24),
         };
         _mixedDetails.Controls.Add(_mixedMono);
-        y += 24;
+        gy += 26;
         _mixedStereo = new RadioButton
         {
-            Text = "Stereo (L = system, R = mic)",
-            Location = new Point(20, y),
-            Size = new Size(280, 22),
+            Text = "Stereo (L = system audio, R = microphone)",
+            Location = new Point(28, gy),
+            Size = new Size(InputWidth - 60, 24),
         };
         _mixedDetails.Controls.Add(_mixedStereo);
+        gy += 36;
 
-        y += 32;
-        _mixedDetails.Controls.Add(MakeLabel("Target sample rate", 16, y));
-        y += 22;
+        _mixedDetails.Controls.Add(MakeLabel("Target sample rate", 20, gy));
+        gy += 22 + 2;
         _mixedSampleRate = new ComboBox
         {
-            Location = new Point(20, y),
-            Size = new Size(220, 24),
+            Location = new Point(28, gy),
+            Size = new Size(280, InputHeight),
             DropDownStyle = ComboBoxStyle.DropDownList,
         };
         _mixedSampleRate.Items.AddRange(new object[]
@@ -259,14 +284,20 @@ internal sealed class SettingsForm : Form
         var panel = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 60,
+            Height = FooterHeight,
             BackColor = Color.FromArgb(246, 246, 246),
         };
+
+        const int btnW = 110;
+        const int btnH = 34;
+        const int btnGap = 10;
+        const int rightMargin = 24;
+
         var save = new Button
         {
             Text = "Save",
-            Size = new Size(96, 30),
-            Location = new Point(panel.Width - 110, 14),
+            Size = new Size(btnW, btnH),
+            Location = new Point(FormWidth - rightMargin - btnW, (FooterHeight - btnH) / 2),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
             BackColor = Color.FromArgb(0, 120, 212),
             ForeColor = Color.White,
@@ -278,8 +309,8 @@ internal sealed class SettingsForm : Form
         var cancel = new Button
         {
             Text = "Cancel",
-            Size = new Size(96, 30),
-            Location = new Point(panel.Width - 214, 14),
+            Size = new Size(btnW, btnH),
+            Location = new Point(FormWidth - rightMargin - btnW * 2 - btnGap, (FooterHeight - btnH) / 2),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
         };
         cancel.Click += (_, _) => { Result = null; Close(); };
@@ -297,7 +328,7 @@ internal sealed class SettingsForm : Form
         Text = text,
         Location = new Point(x, y),
         AutoSize = true,
-        ForeColor = Color.FromArgb(51, 51, 51),
+        ForeColor = Color.FromArgb(40, 40, 40),
     };
 
     private static Label MakeHint(string text, int x, int y) => new()
@@ -306,7 +337,7 @@ internal sealed class SettingsForm : Form
         Location = new Point(x, y),
         AutoSize = true,
         ForeColor = Color.FromArgb(120, 120, 120),
-        Font = new Font("Segoe UI", 8.25f),
+        Font = new Font(SystemFonts.MessageBoxFont!.FontFamily, 8.25f),
     };
 
     private void PopulateAudioDevices()
@@ -344,7 +375,7 @@ internal sealed class SettingsForm : Form
     {
         _outputDir.Text = cfg.OutputDirectory;
         _fileNamePattern.Text = cfg.FileNamePattern;
-        _hotkey.Hotkey = cfg.Hotkey;
+        _hotkey.SetInitialHotkey(cfg.Hotkey);
 
         SelectComboByValue(_bitrate, cfg.Mp3BitrateKbps,
             o => ((BitrateOption)o!).Kbps);
@@ -355,8 +386,9 @@ internal sealed class SettingsForm : Form
 
         _mixedEnabled.Checked = cfg.MixedFileEnabled;
         _mixedDetails.Enabled = cfg.MixedFileEnabled;
-        _mixedMono.Checked   = cfg.MixedFileFormat.Equals("Stereo", StringComparison.OrdinalIgnoreCase) == false;
-        _mixedStereo.Checked = cfg.MixedFileFormat.Equals("Stereo", StringComparison.OrdinalIgnoreCase);
+        var stereo = cfg.MixedFileFormat.Equals("Stereo", StringComparison.OrdinalIgnoreCase);
+        _mixedStereo.Checked = stereo;
+        _mixedMono.Checked = !stereo;
 
         SelectComboByValue(_mixedSampleRate, cfg.MixedFileSampleRate,
             o => ((SampleRateOption)o!).Hz);
@@ -419,7 +451,6 @@ internal sealed class SettingsForm : Form
         Close();
     }
 
-    // ---------- Combo item types ----------
     private sealed record BitrateOption(int Kbps, string Display);
     private sealed record SampleRateOption(int Hz, string Display);
     private sealed record DeviceOption(string Id, string Display);
