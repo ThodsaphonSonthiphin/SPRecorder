@@ -183,7 +183,8 @@ public sealed class RecordingSession : IDisposable
                 var splitter = new Mp3FrameSplitter();
                 if (cfg.SplitSystemTrack)            totalChunks += SplitTrack(splitter, sysPath,   cfg);
                 if (cfg.SplitMicTrack)               totalChunks += SplitTrack(splitter, micPath,   cfg);
-                if (cfg.SplitMixedTrack && willMix)  totalChunks += SplitTrack(splitter, mixedPath, cfg);
+                if (cfg.SplitMixedTrack && finalMixedPath is not null)
+                                             totalChunks += SplitTrack(splitter, finalMixedPath, cfg);
             }
 
             MixingCompleted?.Invoke(finalMixedPath);
