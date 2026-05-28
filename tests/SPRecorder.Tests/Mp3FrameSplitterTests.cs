@@ -76,6 +76,130 @@ public class Mp3FrameSplitterTests
         }
     }
 
+    [Fact]
+    public void SplitByTime_FileUnderDuration_ReturnsInputUnchanged()
+    {
+        var path = TempPath("time-under");
+        try
+        {
+            WriteSineMp3(path, TimeSpan.FromSeconds(10));
+            var result = new Mp3FrameSplitter().SplitByTime(path, TimeSpan.FromSeconds(60));
+
+            Assert.Single(result);
+            Assert.Equal(path, result[0]);
+        }
+        finally
+        {
+            DeleteAll(path);
+        }
+    }
+
+    [Fact]
+    public void SplitByTime_FileOverDuration_ProducesMultipleChunks()
+    {
+        var path = TempPath("time-over");
+        try
+        {
+            WriteSineMp3(path, TimeSpan.FromSeconds(90));
+            var chunks = new Mp3FrameSplitter().SplitByTime(path, TimeSpan.FromSeconds(30));
+
+            Assert.True(chunks.Count >= 3, $"Expected >= 3 chunks, got {chunks.Count}");
+            foreach (var c in chunks)
+            {
+                using var r = new Mp3FileReader(c);
+                // each non-final chunk should be >= the threshold; final chunk can be shorter
+                Assert.True(r.TotalTime.TotalSeconds > 0);
+            }
+        }
+        finally
+        {
+            DeleteAll(path);
+        }
+    }
+
+    [Fact]
+    public void SplitByTime_HandlesShortFinalChunk()
+    {
+        var path = TempPath("time-tail");
+        try
+        {
+            WriteSineMp3(path, TimeSpan.FromSeconds(70));
+            var chunks = new Mp3FrameSplitter().SplitByTime(path, TimeSpan.FromSeconds(30));
+
+            Assert.Equal(3, chunks.Count);
+            using var last = new Mp3FileReader(chunks[^1]);
+            // last chunk should be the leftover (~10 s), not a full 30 s slice
+            Assert.True(last.TotalTime.TotalSeconds < 25,
+                $"Final chunk unexpectedly long: {last.TotalTime.TotalSeconds}s");
+        }
+        finally
+        {
+            DeleteAll(path);
+        }
+    }
+
+    [Fact]
+    public void Chunks_AreValidMp3_ReadableByNAudio()
+    {
+        var path = TempPath("validity");
+        try
+        {
+            WriteSineMp3(path, TimeSpan.FromSeconds(20));
+            var chunks = new Mp3FrameSplitter().SplitBySize(path, 100 * 1024);
+
+            Assert.True(chunks.Count >= 2);
+            foreach (var c in chunks)
+            {
+                using var r = new Mp3FileReader(c);
+                Assert.Equal(1, r.WaveFormat.Channels);
+                Assert.True(r.TotalTime.TotalSeconds > 0);
+
+                // exercise the decoder to confirm no frame corruption
+                var pcm = new byte[r.WaveFormat.AverageBytesPerSecond];
+                int totalRead = 0, read;
+                while ((read = r.Read(pcm, 0, pcm.Length)) > 0) totalRead += read;
+                Assert.True(totalRead > 0, $"Chunk decoded to 0 bytes: {c}");
+            }
+        }
+        finally
+        {
+            DeleteAll(path);
+        }
+    }
+
+    [Fact]
+    public void Chunks_ConcatenatedFrames_EqualInputBytes()
+    {
+        var path = TempPath("concat");
+        try
+        {
+            WriteSineMp3(path, TimeSpan.FromSeconds(15));
+            var originalBytes = File.ReadAllBytes(path);
+
+            var chunks = new Mp3FrameSplitter().SplitBySize(path, 80 * 1024);
+            Assert.True(chunks.Count >= 2);
+
+            // Concatenate all chunk bytes
+            using var concatenated = new MemoryStream();
+            foreach (var c in chunks)
+            {
+                using var fs = File.OpenRead(c);
+                fs.CopyTo(concatenated);
+            }
+            var combined = concatenated.ToArray();
+
+            // The input may have a leading LAME info frame that our frame loop also
+            // preserves verbatim in chunk 1 — so the concatenation of all frame
+            // payloads should equal the input MP3 byte-for-byte.
+            Assert.Equal(originalBytes.Length, combined.Length);
+            Assert.Equal(originalBytes, combined);
+        }
+        finally
+        {
+            DeleteAll(path);
+        }
+    }
+
     // --- helpers ---
 
     private static string TempPath(string label) =>
