@@ -28,6 +28,54 @@ public class Mp3FrameSplitterTests
         }
     }
 
+    [Fact]
+    public void SplitBySize_FileOverThreshold_ProducesMultipleChunks()
+    {
+        var path = TempPath("size-over");
+        try
+        {
+            WriteSineMp3(path, TimeSpan.FromSeconds(60)); // ~720 KB at 96 kbps mono
+            long threshold = 200 * 1024; // 200 KB
+
+            var splitter = new Mp3FrameSplitter();
+            var chunks = splitter.SplitBySize(path, threshold);
+
+            Assert.True(chunks.Count >= 3, $"Expected >= 3 chunks, got {chunks.Count}");
+            foreach (var c in chunks)
+            {
+                Assert.True(File.Exists(c), $"Chunk missing: {c}");
+                Assert.True(new FileInfo(c).Length > 0, $"Chunk empty: {c}");
+            }
+        }
+        finally
+        {
+            DeleteAll(path);
+        }
+    }
+
+    [Fact]
+    public void SplitBySize_ChunkFilenamesAreZeroPadded()
+    {
+        var path = TempPath("naming");
+        try
+        {
+            WriteSineMp3(path, TimeSpan.FromSeconds(15));
+            var chunks = new Mp3FrameSplitter().SplitBySize(path, 50 * 1024); // ~3-4 chunks
+
+            Assert.True(chunks.Count >= 2);
+            var stem = Path.GetFileNameWithoutExtension(path);
+            for (int i = 0; i < chunks.Count; i++)
+            {
+                var expected = $"{stem}_{(i + 1):D3}.mp3";
+                Assert.EndsWith(expected, chunks[i]);
+            }
+        }
+        finally
+        {
+            DeleteAll(path);
+        }
+    }
+
     // --- helpers ---
 
     private static string TempPath(string label) =>
