@@ -28,6 +28,7 @@ public sealed class RecordingSession : IDisposable
     public event Action<string>? Warning;
     public event Action? MixingStarted;
     public event Action<string?>? MixingCompleted;
+    public event Action<int>? SplitCompleted;  // arg = total chunks across all tracks
 
     public RecordingSession(Func<AppConfig> configGetter, Func<string?>? sessionNamePrompt = null)
     {
@@ -104,8 +105,11 @@ public sealed class RecordingSession : IDisposable
         if (_activeConfig.PromptForSessionName)
             TryRenameToSessionFolder();
 
-        if (_activeConfig.MixedFileEnabled)
-            StartMixingInBackground();
+        var willMix   = _activeConfig.MixedFileEnabled;
+        var willSplit = !_activeConfig.SplitMode.Equals("None", StringComparison.OrdinalIgnoreCase);
+
+        if (willMix || willSplit)
+            StartPostProcessingInBackground(willMix, willSplit);
     }
 
     private void TryRenameToSessionFolder()
@@ -140,14 +144,15 @@ public sealed class RecordingSession : IDisposable
         }
     }
 
-    private void StartMixingInBackground()
+    private void StartPostProcessingInBackground(bool willMix, bool willSplit)
     {
-        var sysPath = SystemFilePath;
-        var micPath = MicFilePath;
+        var sysPath   = SystemFilePath;
+        var micPath   = MicFilePath;
         var mixedPath = MixedFilePath;
-        var bitrate = _activeConfig.Mp3BitrateKbps;
-        var sampleRate = _activeConfig.MixedFileSampleRate;
-        var stereo = _activeConfig.MixedFileFormat.Equals("Stereo", StringComparison.OrdinalIgnoreCase);
+        var cfg       = _activeConfig;
+        var bitrate   = cfg.Mp3BitrateKbps;
+        var sampleRate = cfg.MixedFileSampleRate;
+        var stereo    = cfg.MixedFileFormat.Equals("Stereo", StringComparison.OrdinalIgnoreCase);
 
         if (sysPath is null || micPath is null || mixedPath is null) return;
         if (!File.Exists(sysPath) || !File.Exists(micPath)) return;
@@ -155,20 +160,58 @@ public sealed class RecordingSession : IDisposable
         MixingStarted?.Invoke();
         Task.Run(() =>
         {
-            try
+            string? finalMixedPath = null;
+            if (willMix)
             {
-                if (stereo)
-                    Mp3Mixer.MixToStereo(sysPath, micPath, mixedPath, bitrate, sampleRate);
-                else
-                    Mp3Mixer.MixToMono(sysPath, micPath, mixedPath, bitrate, sampleRate);
-                MixingCompleted?.Invoke(mixedPath);
+                try
+                {
+                    if (stereo)
+                        Mp3Mixer.MixToStereo(sysPath, micPath, mixedPath, bitrate, sampleRate);
+                    else
+                        Mp3Mixer.MixToMono(sysPath, micPath, mixedPath, bitrate, sampleRate);
+                    finalMixedPath = mixedPath;
+                }
+                catch (Exception ex)
+                {
+                    Warning?.Invoke("Mixing failed: " + ex.Message);
+                }
             }
-            catch (Exception ex)
+
+            int totalChunks = 0;
+            if (willSplit)
             {
-                Warning?.Invoke("Mixing failed: " + ex.Message);
-                MixingCompleted?.Invoke(null);
+                var splitter = new Mp3FrameSplitter();
+                if (cfg.SplitSystemTrack)            totalChunks += SplitTrack(splitter, sysPath,   cfg);
+                if (cfg.SplitMicTrack)               totalChunks += SplitTrack(splitter, micPath,   cfg);
+                if (cfg.SplitMixedTrack && willMix)  totalChunks += SplitTrack(splitter, mixedPath, cfg);
             }
+
+            MixingCompleted?.Invoke(finalMixedPath);
+            if (willSplit) SplitCompleted?.Invoke(totalChunks);
         });
+    }
+
+    private int SplitTrack(IMp3Splitter splitter, string path, AppConfig cfg)
+    {
+        if (!File.Exists(path)) return 0;
+        try
+        {
+            var chunks = cfg.SplitMode.Equals("Time", StringComparison.OrdinalIgnoreCase)
+                ? splitter.SplitByTime(path, TimeSpan.FromMinutes(cfg.SplitTimeMinutes))
+                : splitter.SplitBySize(path, (long)cfg.SplitSizeMb * 1024L * 1024L);
+
+            if (chunks.Count > 1)
+            {
+                File.Delete(path);
+                return chunks.Count;
+            }
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Warning?.Invoke($"Split failed for {Path.GetFileName(path)}: {ex.Message}");
+            return 0;
+        }
     }
 
     public TimeSpan? Elapsed => CurrentState == State.Recording ? DateTime.Now - _startedAt : null;
