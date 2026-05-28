@@ -38,6 +38,17 @@ internal sealed class SettingsForm : Form
     private ComboBox _mixedSampleRate = null!;
     private GroupBox _mixedDetails = null!;
 
+    private RadioButton _splitNone = null!;
+    private RadioButton _splitByTime = null!;
+    private RadioButton _splitBySize = null!;
+    private NumericUpDown _splitMinutes = null!;
+    private NumericUpDown _splitSizeMb = null!;
+    private Label _splitSizeHint = null!;
+    private CheckBox _splitSystem = null!;
+    private CheckBox _splitMic = null!;
+    private CheckBox _splitMixed = null!;
+    private GroupBox _splitApplyTo = null!;
+
     public SettingsForm(AppConfig initial, bool isRecording)
     {
         _initial = initial;
@@ -61,6 +72,7 @@ internal sealed class SettingsForm : Form
         tabs.TabPages.Add(BuildGeneralTab());
         tabs.TabPages.Add(BuildAudioTab());
         tabs.TabPages.Add(BuildMixedTab());
+        tabs.TabPages.Add(BuildSplittingTab());
 
         // Order matters: Bottom-docked controls must be added BEFORE Fill,
         // otherwise the Fill control claims the entire ClientArea and the
@@ -295,6 +307,123 @@ internal sealed class SettingsForm : Form
         return page;
     }
 
+    // ---------- Splitting tab ----------
+    private TabPage BuildSplittingTab()
+    {
+        var page = new TabPage("Splitting") { Padding = new Padding(TabPad) };
+        int y = TabPad;
+
+        var modeBox = new GroupBox
+        {
+            Text = "Split mode",
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, 150),
+        };
+        page.Controls.Add(modeBox);
+
+        const int numericWidth = 90;
+
+        _splitNone = new RadioButton
+        {
+            Text = "None — keep one file per track",
+            Location = new Point(16, 28),
+            Size = new Size(InputWidth - 40, 24),
+        };
+        modeBox.Controls.Add(_splitNone);
+
+        _splitByTime = new RadioButton
+        {
+            Text = "By time",
+            Location = new Point(16, 60),
+            Size = new Size(110, 24),
+        };
+        modeBox.Controls.Add(_splitByTime);
+        _splitMinutes = new NumericUpDown
+        {
+            Location = new Point(140, 58),
+            Size = new Size(numericWidth, InputHeight),
+            Minimum = 1,
+            Maximum = 1440,
+        };
+        modeBox.Controls.Add(_splitMinutes);
+        modeBox.Controls.Add(MakeLabel("minutes", 140 + numericWidth + 8, 62));
+
+        _splitBySize = new RadioButton
+        {
+            Text = "By size",
+            Location = new Point(16, 100),
+            Size = new Size(110, 24),
+        };
+        modeBox.Controls.Add(_splitBySize);
+        _splitSizeMb = new NumericUpDown
+        {
+            Location = new Point(140, 98),
+            Size = new Size(numericWidth, InputHeight),
+            Minimum = 1,
+            Maximum = 10000,
+        };
+        modeBox.Controls.Add(_splitSizeMb);
+        modeBox.Controls.Add(MakeLabel("MB", 140 + numericWidth + 8, 102));
+
+        _splitSizeHint = MakeHint("NotebookLM accepts ≤ 200 MB", 140, 124);
+        _splitSizeHint.ForeColor = Color.DarkOrange;
+        _splitSizeHint.Visible = false;
+        modeBox.Controls.Add(_splitSizeHint);
+
+        y += modeBox.Height + FieldGap;
+
+        _splitApplyTo = new GroupBox
+        {
+            Text = "Apply to",
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, 120),
+        };
+        page.Controls.Add(_splitApplyTo);
+
+        _splitSystem = new CheckBox
+        {
+            Text = "System track",
+            Location = new Point(16, 28),
+            Size = new Size(InputWidth - 40, 24),
+        };
+        _splitApplyTo.Controls.Add(_splitSystem);
+
+        _splitMic = new CheckBox
+        {
+            Text = "Microphone track",
+            Location = new Point(16, 56),
+            Size = new Size(InputWidth - 40, 24),
+        };
+        _splitApplyTo.Controls.Add(_splitMic);
+
+        _splitMixed = new CheckBox
+        {
+            Text = "Mixed track",
+            Location = new Point(16, 84),
+            Size = new Size(InputWidth - 40, 24),
+        };
+        _splitApplyTo.Controls.Add(_splitMixed);
+
+        // Wire up enable/disable logic
+        void Refresh()
+        {
+            bool timeOn = _splitByTime.Checked;
+            bool sizeOn = _splitBySize.Checked;
+            bool anyOn  = timeOn || sizeOn;
+
+            _splitMinutes.Enabled = timeOn;
+            _splitSizeMb.Enabled  = sizeOn;
+            _splitApplyTo.Enabled = anyOn;
+            _splitSizeHint.Visible = sizeOn && _splitSizeMb.Value > 200;
+        }
+        _splitNone.CheckedChanged   += (_, _) => Refresh();
+        _splitByTime.CheckedChanged += (_, _) => Refresh();
+        _splitBySize.CheckedChanged += (_, _) => Refresh();
+        _splitSizeMb.ValueChanged   += (_, _) => Refresh();
+
+        return page;
+    }
+
     private Panel BuildFooter()
     {
         var panel = new Panel
@@ -416,6 +545,28 @@ internal sealed class SettingsForm : Form
 
         SelectComboByValue(_mixedSampleRate, cfg.MixedFileSampleRate,
             o => ((SampleRateOption)o!).Hz);
+
+        _splitMinutes.Value = Math.Clamp(cfg.SplitTimeMinutes, (int)_splitMinutes.Minimum, (int)_splitMinutes.Maximum);
+        _splitSizeMb.Value  = Math.Clamp(cfg.SplitSizeMb,      (int)_splitSizeMb.Minimum,  (int)_splitSizeMb.Maximum);
+        _splitSystem.Checked = cfg.SplitSystemTrack;
+        _splitMic.Checked    = cfg.SplitMicTrack;
+        _splitMixed.Checked  = cfg.SplitMixedTrack;
+
+        switch (cfg.SplitMode)
+        {
+            case "Time": _splitByTime.Checked = true; break;
+            case "Size": _splitBySize.Checked = true; break;
+            default:     _splitNone.Checked   = true; break;
+        }
+        // Apply enable/visibility state directly. The radio CheckedChanged handlers
+        // inside BuildSplittingTab also fire Refresh(), but doing it explicitly here
+        // covers the case where the desired radio was already the default-checked one.
+        bool isTime = cfg.SplitMode.Equals("Time", StringComparison.OrdinalIgnoreCase);
+        bool isSize = cfg.SplitMode.Equals("Size", StringComparison.OrdinalIgnoreCase);
+        _splitMinutes.Enabled  = isTime;
+        _splitSizeMb.Enabled   = isSize;
+        _splitApplyTo.Enabled  = isTime || isSize;
+        _splitSizeHint.Visible = isSize && _splitSizeMb.Value > 200;
     }
 
     private static void SelectComboByValue<T>(ComboBox combo, T target, Func<object?, T> getter)
@@ -471,6 +622,14 @@ internal sealed class SettingsForm : Form
             MixedFileSampleRate = sampleRate,
             PromptForSessionName = _promptForName.Checked,
             AutoDetectCallsEnabled = _autoDetectCalls.Checked,
+            SplitMode = _splitByTime.Checked ? "Time"
+                      : _splitBySize.Checked ? "Size"
+                      : "None",
+            SplitTimeMinutes = (int)_splitMinutes.Value,
+            SplitSizeMb      = (int)_splitSizeMb.Value,
+            SplitSystemTrack = _splitSystem.Checked,
+            SplitMicTrack    = _splitMic.Checked,
+            SplitMixedTrack  = _splitMixed.Checked,
         };
         DialogResult = DialogResult.OK;
         Close();
