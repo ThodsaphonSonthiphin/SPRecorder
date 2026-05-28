@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using SPRecorder.Configuration;
 using SPRecorder.Settings;
 
@@ -87,6 +88,67 @@ public class AppConfigStoreTests
         {
             if (File.Exists(path)) File.Delete(path);
             if (File.Exists(path + ".tmp")) File.Delete(path + ".tmp");
+        }
+    }
+
+    [Fact]
+    public void Save_RoundtripsSplitFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sprec_cfg_{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new AppConfigStore(path, new AppConfig());
+            var updated = new AppConfig
+            {
+                SplitMode = "Size",
+                SplitTimeMinutes = 45,
+                SplitSizeMb = 180,
+                SplitSystemTrack = false,
+                SplitMicTrack = true,
+                SplitMixedTrack = true,
+            };
+
+            store.Save(updated);
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var root = doc.RootElement;
+            Assert.Equal("Size", root.GetProperty("SplitMode").GetString());
+            Assert.Equal(45,     root.GetProperty("SplitTimeMinutes").GetInt32());
+            Assert.Equal(180,    root.GetProperty("SplitSizeMb").GetInt32());
+            Assert.False(        root.GetProperty("SplitSystemTrack").GetBoolean());
+            Assert.True(         root.GetProperty("SplitMicTrack").GetBoolean());
+            Assert.True(         root.GetProperty("SplitMixedTrack").GetBoolean());
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_ClampsAndFallsBackInvalidSplitFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sprec_cfg_{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, """
+            {
+              "SplitMode": "Garbage",
+              "SplitTimeMinutes": 99999,
+              "SplitSizeMb": 0
+            }
+            """);
+
+            var builder = new ConfigurationBuilder().AddJsonFile(path);
+            var loaded = AppConfig.Load(builder.Build());
+
+            Assert.Equal("None", loaded.SplitMode);
+            Assert.Equal(1440,   loaded.SplitTimeMinutes); // upper bound
+            Assert.Equal(1,      loaded.SplitSizeMb);      // lower bound
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
         }
     }
 }
