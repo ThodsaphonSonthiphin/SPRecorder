@@ -1,6 +1,7 @@
 using NAudio.Wave;
 using SPRecorder.Audio;
 using SPRecorder.Configuration;
+using SPRecorder.Overlay;
 using SPRecorder.Settings;
 
 namespace SPRecorder.Recording;
@@ -17,12 +18,15 @@ public sealed class RecordingSession : IDisposable
     private Mp3StreamWriter? _systemWriter;
     private Mp3StreamWriter? _micWriter;
     private DateTime _startedAt;
+    private ScreenRecorder? _screenRecorder;
+    private InputHighlightOverlay? _overlay;
 
     public State CurrentState { get; private set; } = State.Idle;
     public DateTime StartedAt => _startedAt;
     public string? SystemFilePath { get; private set; }
     public string? MicFilePath { get; private set; }
     public string? MixedFilePath { get; private set; }
+    public string? ScreenFilePath { get; private set; }
 
     public event Action<State>? StateChanged;
     public event Action<string>? Warning;
@@ -70,6 +74,9 @@ public sealed class RecordingSession : IDisposable
         _systemCapture.Start();
         _micCapture.Start();
 
+        if (_activeConfig.ScreenRecordingEnabled)
+            StartScreenTrack();
+
         CurrentState = State.Recording;
         StateChanged?.Invoke(CurrentState);
     }
@@ -81,6 +88,51 @@ public sealed class RecordingSession : IDisposable
     {
         if (e.Exception != null)
             Warning?.Invoke($"{source} stopped unexpectedly: {e.Exception.Message}");
+    }
+
+    private void StartScreenTrack()
+    {
+        ScreenFilePath = Path.Combine(_activeConfig.OutputDirectory,
+            FileNameBuilder.BuildScreen(_activeConfig.FileNamePattern, _startedAt));
+
+        if (_activeConfig.ShowKeystrokes)
+        {
+            try
+            {
+                var monitor = MonitorForDevice(_activeConfig.ScreenMonitorDeviceName);
+                _overlay = new InputHighlightOverlay();
+                _overlay.Show(monitor);
+            }
+            catch (Exception ex)
+            {
+                Warning?.Invoke("Keystroke overlay unavailable; recording screen without it. " + ex.Message);
+                try { _overlay?.HideAndDispose(); } catch { /* ignore */ }
+                _overlay = null;
+            }
+        }
+
+        try
+        {
+            _screenRecorder = new ScreenRecorder();
+            _screenRecorder.Failed += msg => Warning?.Invoke(msg);
+            _screenRecorder.Start(ScreenFilePath, _activeConfig);
+        }
+        catch (Exception ex)
+        {
+            Warning?.Invoke("Screen recording could not start; continuing with audio only. " + ex.Message);
+            _screenRecorder = null;
+            ScreenFilePath = null;
+        }
+    }
+
+    private static System.Windows.Forms.Screen MonitorForDevice(string deviceName)
+    {
+        if (!string.IsNullOrEmpty(deviceName))
+        {
+            foreach (var s in System.Windows.Forms.Screen.AllScreens)
+                if (s.DeviceName == deviceName) return s;
+        }
+        return System.Windows.Forms.Screen.PrimaryScreen!;
     }
 
     public void Stop()
@@ -98,6 +150,12 @@ public sealed class RecordingSession : IDisposable
         _micWriter = null;
         _systemCapture = null;
         _micCapture = null;
+
+        try { _screenRecorder?.Stop(); } catch (Exception ex) { Warning?.Invoke("Screen stop: " + ex.Message); }
+        try { _overlay?.HideAndDispose(); } catch { /* ignore */ }
+        _screenRecorder?.Dispose();
+        _screenRecorder = null;
+        _overlay = null;
 
         CurrentState = State.Idle;
         StateChanged?.Invoke(CurrentState);
@@ -137,6 +195,13 @@ public sealed class RecordingSession : IDisposable
             SystemFilePath = newSystem;
             MicFilePath    = newMic;
             MixedFilePath  = newMixed;
+
+            if (ScreenFilePath is not null && File.Exists(ScreenFilePath))
+            {
+                var newScreen = Path.Combine(folder, $"{folderName}_screen.mp4");
+                File.Move(ScreenFilePath, newScreen);
+                ScreenFilePath = newScreen;
+            }
         }
         catch (Exception ex)
         {
