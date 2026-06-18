@@ -67,10 +67,7 @@ public sealed class InputHighlightOverlay : IDisposable
     }
 
     private static IntPtr SetHook(LowLevelKeyboardProc proc)
-    {
-        using var module = System.Diagnostics.Process.GetCurrentProcess().MainModule!;
-        return SetWindowsHookEx(WH_KEYBOARD_LL, proc, GetModuleHandle(module.ModuleName), 0);
-    }
+        => SetWindowsHookEx(WH_KEYBOARD_LL, proc, GetModuleHandle(null), 0);
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
