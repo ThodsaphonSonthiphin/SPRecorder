@@ -153,7 +153,7 @@ public sealed class RecordingSession : IDisposable
 
         try { _screenRecorder?.Stop(); } catch (Exception ex) { Warning?.Invoke("Screen stop: " + ex.Message); }
         try { _overlay?.HideAndDispose(); } catch { /* ignore */ }
-        _screenRecorder?.Dispose();
+        try { _screenRecorder?.Dispose(); } catch { /* ignore */ }
         _screenRecorder = null;
         _overlay = null;
 
