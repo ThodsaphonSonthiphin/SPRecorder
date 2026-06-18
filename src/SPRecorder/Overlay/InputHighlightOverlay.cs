@@ -15,7 +15,6 @@ public sealed class InputHighlightOverlay : IDisposable
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
     private const int WM_SYSKEYDOWN = 0x0104;
-    private const int GWL_EXSTYLE = -20;
     private const int WS_EX_LAYERED = 0x00080000;
     private const int WS_EX_TRANSPARENT = 0x00000020;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
@@ -31,12 +30,18 @@ public sealed class InputHighlightOverlay : IDisposable
 
     public void Show(Screen monitor)
     {
+        System.Diagnostics.Debug.Assert(System.Windows.Forms.Application.MessageLoop,
+            "InputHighlightOverlay.Show must be called on the UI thread.");
+
         _form = new CaptionForm();
         _form.Bounds = monitor.Bounds;           // virtual-screen coords (may be negative)
         _form.Show();
         _form.DpiChanged += (_, _) => { if (_form != null) _form.Bounds = monitor.Bounds; };
 
         _hookId = SetHook(_proc);
+        if (_hookId == IntPtr.Zero)
+            throw new System.ComponentModel.Win32Exception(
+                Marshal.GetLastWin32Error(), "Failed to install keyboard hook for the key caster.");
 
         _fade.Tick += (_, _) =>
         {
@@ -63,8 +68,8 @@ public sealed class InputHighlightOverlay : IDisposable
 
     private static IntPtr SetHook(LowLevelKeyboardProc proc)
     {
-        // Module handle is optional for LL hooks within the same process.
-        return SetWindowsHookEx(WH_KEYBOARD_LL, proc, IntPtr.Zero, 0);
+        using var module = System.Diagnostics.Process.GetCurrentProcess().MainModule!;
+        return SetWindowsHookEx(WH_KEYBOARD_LL, proc, GetModuleHandle(module.ModuleName), 0);
     }
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -147,6 +152,9 @@ public sealed class InputHighlightOverlay : IDisposable
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
 }
 
 internal static class KeyLabels
