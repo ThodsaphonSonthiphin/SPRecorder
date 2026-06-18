@@ -151,4 +151,63 @@ public class AppConfigStoreTests
             if (File.Exists(path)) File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Save_RoundtripsScreenFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sprec_cfg_{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new AppConfigStore(path, new AppConfig());
+            var updated = new AppConfig
+            {
+                ScreenRecordingEnabled = true,
+                ScreenMonitorDeviceName = "\\\\.\\DISPLAY2",
+                ScreenFrameRate = 25,
+                ScreenQuality = "High",
+                ShowMouseClicks = false,
+                ShowKeystrokes = false,
+            };
+
+            store.Save(updated);
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var root = doc.RootElement;
+            Assert.True(root.GetProperty("ScreenRecordingEnabled").GetBoolean());
+            Assert.Equal("\\\\.\\DISPLAY2", root.GetProperty("ScreenMonitorDeviceName").GetString());
+            Assert.Equal(25, root.GetProperty("ScreenFrameRate").GetInt32());
+            Assert.Equal("High", root.GetProperty("ScreenQuality").GetString());
+            Assert.False(root.GetProperty("ShowMouseClicks").GetBoolean());
+            Assert.False(root.GetProperty("ShowKeystrokes").GetBoolean());
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Load_ClampsScreenFrameRate_AndNormalizesQuality()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sprec_cfg_{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, """
+            {
+              "ScreenFrameRate": 99,
+              "ScreenQuality": "ultra"
+            }
+            """);
+
+            var builder = new ConfigurationBuilder().AddJsonFile(path);
+            var loaded = AppConfig.Load(builder.Build());
+
+            Assert.Equal(30, loaded.ScreenFrameRate);     // snapped to nearest allowed {15,25,30}
+            Assert.Equal("Medium", loaded.ScreenQuality); // unknown → Medium
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
 }

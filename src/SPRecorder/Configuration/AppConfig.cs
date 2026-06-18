@@ -27,6 +27,13 @@ public sealed record AppConfig
     public bool   SplitMicTrack    { get; init; } = true;
     public bool   SplitMixedTrack  { get; init; } = true;
 
+    public bool   ScreenRecordingEnabled  { get; init; } = false;
+    public string ScreenMonitorDeviceName { get; init; } = "";        // "" = primary; else \\.\DISPLAYn
+    public int    ScreenFrameRate         { get; init; } = 30;        // 15 | 25 | 30
+    public string ScreenQuality           { get; init; } = "Medium";  // Low | Medium | High
+    public bool   ShowMouseClicks         { get; init; } = true;
+    public bool   ShowKeystrokes          { get; init; } = true;
+
     public static AppConfig Load(IConfiguration cfg)
     {
         var raw = cfg.Get<AppConfig>() ?? new AppConfig();
@@ -36,6 +43,17 @@ public sealed record AppConfig
             SplitMode = raw.SplitMode is "Time" or "Size" ? raw.SplitMode : "None",
             SplitTimeMinutes = Math.Clamp(raw.SplitTimeMinutes, 1, 1440),
             SplitSizeMb      = Math.Clamp(raw.SplitSizeMb,      1, 10000),
+            ScreenFrameRate = NearestFrameRate(raw.ScreenFrameRate),
+            ScreenQuality   = raw.ScreenQuality is "Low" or "Medium" or "High" ? raw.ScreenQuality : "Medium",
         };
+    }
+
+    private static int NearestFrameRate(int fps)
+    {
+        int[] allowed = { 15, 25, 30 };
+        int best = allowed[0];
+        foreach (var a in allowed)
+            if (Math.Abs(a - fps) < Math.Abs(best - fps)) best = a;
+        return best;
     }
 }
