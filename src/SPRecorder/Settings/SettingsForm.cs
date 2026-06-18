@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using SPRecorder.Configuration;
 using SPRecorder.Hotkey;
+using SPRecorder.Recording;
 
 namespace SPRecorder.Settings;
 
@@ -49,6 +50,14 @@ internal sealed class SettingsForm : Form
     private CheckBox _splitMixed = null!;
     private GroupBox _splitApplyTo = null!;
 
+    private CheckBox _screenEnabled = null!;
+    private ComboBox _screenMonitor = null!;
+    private ComboBox _screenFps = null!;
+    private ComboBox _screenQuality = null!;
+    private CheckBox _showMouseClicks = null!;
+    private CheckBox _showKeystrokes = null!;
+    private GroupBox _screenDetails = null!;
+
     public SettingsForm(AppConfig initial, bool isRecording)
     {
         _initial = initial;
@@ -73,6 +82,7 @@ internal sealed class SettingsForm : Form
         tabs.TabPages.Add(BuildAudioTab());
         tabs.TabPages.Add(BuildMixedTab());
         tabs.TabPages.Add(BuildSplittingTab());
+        tabs.TabPages.Add(BuildScreenTab());
 
         // Order matters: Bottom-docked controls must be added BEFORE Fill,
         // otherwise the Fill control claims the entire ClientArea and the
@@ -424,6 +434,113 @@ internal sealed class SettingsForm : Form
         return page;
     }
 
+    // ---------- Screen tab ----------
+    private TabPage BuildScreenTab()
+    {
+        var page = new TabPage("Screen") { Padding = new Padding(TabPad) };
+        int y = TabPad;
+
+        _screenEnabled = new CheckBox
+        {
+            Text = "Record screen too",
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, 24),
+        };
+        _screenEnabled.CheckedChanged += (_, _) => _screenDetails.Enabled = _screenEnabled.Checked;
+        page.Controls.Add(_screenEnabled);
+        y += 24 + FieldGap;
+
+        _screenDetails = new GroupBox
+        {
+            Text = "Screen options",
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, 300),
+        };
+        page.Controls.Add(_screenDetails);
+
+        int gy = 30;
+        _screenDetails.Controls.Add(MakeLabel("Monitor", 16, gy));
+        gy += 22 + LabelToInput;
+        _screenMonitor = new ComboBox
+        {
+            Location = new Point(20, gy),
+            Size = new Size(InputWidth - 60, InputHeight),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            DisplayMember = nameof(MonitorOption.Display),
+        };
+        _screenDetails.Controls.Add(_screenMonitor);
+        gy += InputHeight + FieldGap;
+
+        _screenDetails.Controls.Add(MakeLabel("Frame rate", 16, gy));
+        gy += 22 + LabelToInput;
+        _screenFps = new ComboBox
+        {
+            Location = new Point(20, gy),
+            Size = new Size(220, InputHeight),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            DisplayMember = nameof(FpsOption.Display),
+        };
+        _screenFps.Items.AddRange(new object[]
+        {
+            new FpsOption(15, "15 fps (smallest)"),
+            new FpsOption(25, "25 fps"),
+            new FpsOption(30, "30 fps (smoothest)"),
+        });
+        _screenDetails.Controls.Add(_screenFps);
+        gy += InputHeight + FieldGap;
+
+        _screenDetails.Controls.Add(MakeLabel("Quality", 16, gy));
+        gy += 22 + LabelToInput;
+        _screenQuality = new ComboBox
+        {
+            Location = new Point(20, gy),
+            Size = new Size(220, InputHeight),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            DisplayMember = nameof(QualityOption.Display),
+        };
+        _screenQuality.Items.AddRange(new object[]
+        {
+            new QualityOption("Low",    "Low (smallest file)"),
+            new QualityOption("Medium", "Medium (recommended)"),
+            new QualityOption("High",   "High (sharpest)"),
+        });
+        _screenDetails.Controls.Add(_screenQuality);
+        gy += InputHeight + FieldGap;
+
+        _showMouseClicks = new CheckBox
+        {
+            Text = "Highlight mouse clicks",
+            Location = new Point(20, gy),
+            Size = new Size(InputWidth - 60, 24),
+        };
+        _screenDetails.Controls.Add(_showMouseClicks);
+        gy += 26;
+
+        _showKeystrokes = new CheckBox
+        {
+            Text = "Show keystrokes on screen",
+            Location = new Point(20, gy),
+            Size = new Size(InputWidth - 60, 24),
+        };
+        _screenDetails.Controls.Add(_showKeystrokes);
+        gy += 24 + 2;
+        var privacy = MakeHint("⚠  Shows every key you press in the video — avoid typing passwords while recording.", 38, gy);
+        privacy.ForeColor = Color.DarkOrange;
+        privacy.MaximumSize = new Size(InputWidth - 70, 0);
+        privacy.AutoSize = true;
+        _screenDetails.Controls.Add(privacy);
+
+        return page;
+    }
+
+    private void PopulateMonitors()
+    {
+        _screenMonitor.Items.Clear();
+        _screenMonitor.Items.Add(new MonitorOption("", "Primary monitor"));
+        foreach (var d in ScreenRecorder.GetDisplays())
+            _screenMonitor.Items.Add(new MonitorOption(d.DeviceName, d.FriendlyName));
+    }
+
     private Panel BuildFooter()
     {
         var panel = new Panel
@@ -567,6 +684,15 @@ internal sealed class SettingsForm : Form
         _splitSizeMb.Enabled   = isSize;
         _splitApplyTo.Enabled  = isTime || isSize;
         _splitSizeHint.Visible = isSize && _splitSizeMb.Value > 200;
+
+        _screenEnabled.Checked = cfg.ScreenRecordingEnabled;
+        _screenDetails.Enabled = cfg.ScreenRecordingEnabled;
+        PopulateMonitors();
+        SelectMonitor(cfg.ScreenMonitorDeviceName);
+        SelectComboByValue(_screenFps, cfg.ScreenFrameRate, o => ((FpsOption)o!).Fps);
+        SelectStringCombo(_screenQuality, cfg.ScreenQuality, o => ((QualityOption)o!).Value);
+        _showMouseClicks.Checked = cfg.ShowMouseClicks;
+        _showKeystrokes.Checked = cfg.ShowKeystrokes;
     }
 
     private static void SelectComboByValue<T>(ComboBox combo, T target, Func<object?, T> getter)
@@ -576,6 +702,21 @@ internal sealed class SettingsForm : Form
         {
             if (getter(combo.Items[i]).Equals(target)) { combo.SelectedIndex = i; return; }
         }
+        if (combo.Items.Count > 0) combo.SelectedIndex = 0;
+    }
+
+    private void SelectMonitor(string deviceName)
+    {
+        for (int i = 0; i < _screenMonitor.Items.Count; i++)
+            if (_screenMonitor.Items[i] is MonitorOption m && m.DeviceName == deviceName)
+            { _screenMonitor.SelectedIndex = i; return; }
+        if (_screenMonitor.Items.Count > 0) _screenMonitor.SelectedIndex = 0;
+    }
+
+    private static void SelectStringCombo(ComboBox combo, string target, Func<object?, string> getter)
+    {
+        for (int i = 0; i < combo.Items.Count; i++)
+            if (getter(combo.Items[i]) == target) { combo.SelectedIndex = i; return; }
         if (combo.Items.Count > 0) combo.SelectedIndex = 0;
     }
 
@@ -630,6 +771,12 @@ internal sealed class SettingsForm : Form
             SplitSystemTrack = _splitSystem.Checked,
             SplitMicTrack    = _splitMic.Checked,
             SplitMixedTrack  = _splitMixed.Checked,
+            ScreenRecordingEnabled  = _screenEnabled.Checked,
+            ScreenMonitorDeviceName = (_screenMonitor.SelectedItem as MonitorOption)?.DeviceName ?? "",
+            ScreenFrameRate         = ((FpsOption?)_screenFps.SelectedItem)?.Fps ?? 30,
+            ScreenQuality           = ((QualityOption?)_screenQuality.SelectedItem)?.Value ?? "Medium",
+            ShowMouseClicks         = _showMouseClicks.Checked,
+            ShowKeystrokes          = _showKeystrokes.Checked,
         };
         DialogResult = DialogResult.OK;
         Close();
@@ -638,4 +785,7 @@ internal sealed class SettingsForm : Form
     private sealed record BitrateOption(int Kbps, string Display);
     private sealed record SampleRateOption(int Hz, string Display);
     private sealed record DeviceOption(string Id, string Display);
+    private sealed record MonitorOption(string DeviceName, string Display);
+    private sealed record FpsOption(int Fps, string Display);
+    private sealed record QualityOption(string Value, string Display);
 }
