@@ -38,6 +38,11 @@ public sealed class ScreenRecorder : IDisposable
 
     public void Start(string filePath, AppConfig cfg)
     {
+        // Defensive: a second Start() without an intervening Stop() must not leak
+        // the previous native recorder.
+        if (_recorder is not null)
+            Stop();
+
         // Pick the configured monitor; fall back to primary if it is gone.
         DisplayRecordingSource source;
         var wanted = cfg.ScreenMonitorDeviceName;
