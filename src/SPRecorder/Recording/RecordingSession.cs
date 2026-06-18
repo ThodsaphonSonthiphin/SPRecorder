@@ -151,8 +151,12 @@ public sealed class RecordingSession : IDisposable
         _systemCapture = null;
         _micCapture = null;
 
-        try { _screenRecorder?.Stop(); } catch (Exception ex) { Warning?.Invoke("Screen stop: " + ex.Message); }
+        // Unhook the global keyboard hook FIRST: ScreenRecorder.Stop() blocks the UI
+        // thread waiting for the MP4 to finalize, and a low-level keyboard hook is
+        // serviced on the installing (UI) thread — leaving it hooked during that wait
+        // would stall system-wide keyboard input until Windows times the hook out.
         try { _overlay?.HideAndDispose(); } catch { /* ignore */ }
+        try { _screenRecorder?.Stop(); } catch (Exception ex) { Warning?.Invoke("Screen stop: " + ex.Message); }
         try { _screenRecorder?.Dispose(); } catch { /* ignore */ }
         _screenRecorder = null;
         _overlay = null;
