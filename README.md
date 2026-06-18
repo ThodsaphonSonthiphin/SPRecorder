@@ -1,6 +1,6 @@
 # SPRecorder
 
-Dual-track meeting recorder for Windows. Captures **system audio** (what other meeting participants say through your speakers/headphones) and **microphone input** (your voice) into **two separate MP3 files**, controlled by a global hotkey.
+Dual-track meeting recorder for Windows with optional screen capture. Captures **system audio** (what other meeting participants say through your speakers/headphones) and **microphone input** (your voice) into **two separate MP3 files**, controlled by a global hotkey. Optionally records your screen to an MP4 alongside the audio.
 
 Built for the case where Microsoft Teams meetings aren't being recorded by the host. Output files are sized for upload to Google NotebookLM (≤ 200 MB per source).
 
@@ -10,8 +10,9 @@ After each recording, SPRecorder also produces a third **mixed mono MP3** that c
 
 ## Requirements
 
-- Windows 10/11
-- .NET 10 SDK (build only). The published single-file `.exe` is self-contained.
+- Windows 10/11 x64
+- .NET 10 SDK (build only). The published output is a self-contained folder.
+- **Visual C++ Redistributable** and **Media Foundation** on the target PC (both present on normal Windows 10/11; on N/KN editions install the Media Feature Pack).
 
 ## Build
 
@@ -25,17 +26,24 @@ dotnet build
 dotnet test
 ```
 
-## Publish single-file `.exe`
+## Publish
 
 ```bash
-dotnet publish src/SPRecorder/SPRecorder.csproj `
-  -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+dotnet publish src/SPRecorder/SPRecorder.csproj -c Release -r win-x64 --self-contained true
 ```
 
-Output: `src/SPRecorder/bin/Release/net10.0-windows/win-x64/publish/SPRecorder.exe` (~70 MB).
+Output folder: `src/SPRecorder/bin/Release/net10.0-windows/win-x64/publish/`.
 
-Copy `SPRecorder.exe` and `appsettings.json` together to a folder of your choice (e.g. `C:\Tools\SPRecorder\`). Auto-start: place a shortcut in `shell:startup`.
+> Screen recording uses ScreenRecorderLib, whose native `ScreenRecorderLib.dll`
+> cannot be embedded in a single-file `.exe`. **Copy the whole published folder**
+> (it contains `SPRecorder.exe`, `ScreenRecorderLib.dll`, `appsettings.json`, and
+> companion DLLs) to a location of your choice. No installer is required.
+>
+> Prerequisites on the target PC: the **Visual C++ Redistributable** and
+> **Media Foundation** (both present on normal Windows 10/11; on N/KN editions
+> install the Media Feature Pack). Build target is **x64**.
+
+Auto-start: place a shortcut to `SPRecorder.exe` in `shell:startup`.
 
 ## Configuration (`appsettings.json`)
 
@@ -57,6 +65,18 @@ Copy `SPRecorder.exe` and `appsettings.json` together to a folder of your choice
 3. Press hotkey again → recording stops. Two MP3 files appear immediately (`_system.mp3`, `_mic.mp3`); the third (`_mixed.mp3`) appears a few seconds later once mixing finishes (a toast confirms when ready).
 4. Upload `_mixed.mp3` to NotebookLM/your AI summarizer of choice.
 5. Right-click tray for menu: Start/Stop, Open folder, About, Quit.
+
+### Screen recording (optional)
+
+Enable **Record screen too** in Settings → Screen, or via the tray menu. When on,
+recording also produces `<name>_screen.mp4` of the chosen monitor (default primary)
+with the meeting audio embedded, plus a mouse-click highlight and an on-screen
+display of the keys you press.
+
+> **Privacy**: the keystroke display shows **every key you type**, so anything you
+> type — including passwords — appears in the video. Turn off "Show keystrokes on
+> screen" (Settings → Screen) before typing secrets, or avoid typing them while
+> recording.
 
 ## Project layout
 
