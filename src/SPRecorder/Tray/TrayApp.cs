@@ -21,6 +21,7 @@ internal sealed class TrayApp : ApplicationContext
     private readonly System.Windows.Forms.Timer _tooltipTimer;
     private readonly ToolStripMenuItem _toggleItem;
     private readonly ToolStripMenuItem _statusItem;
+    private readonly ToolStripMenuItem _screenItem;
     private readonly SynchronizationContext _uiContext;
 
     private bool _autoStarted;
@@ -50,10 +51,16 @@ internal sealed class TrayApp : ApplicationContext
             ShortcutKeyDisplayString = _store.Current.Hotkey,
         };
         _statusItem = new ToolStripMenuItem("Idle") { Enabled = false };
+        _screenItem = new ToolStripMenuItem("Record screen too", null, (_, _) => ToggleScreenSetting())
+        {
+            CheckOnClick = false,
+            Checked = _store.Current.ScreenRecordingEnabled,
+        };
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(_toggleItem);
         menu.Items.Add(_statusItem);
+        menu.Items.Add(_screenItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Open recordings folder", null, (_, _) => OpenFolder());
         menu.Items.Add("Settings…", null, (_, _) => OpenSettings());
@@ -100,8 +107,16 @@ internal sealed class TrayApp : ApplicationContext
         }
     }
 
+    private void ToggleScreenSetting()
+    {
+        var next = !_store.Current.ScreenRecordingEnabled;
+        _store.Save(_store.Current with { ScreenRecordingEnabled = next });
+    }
+
     private void OnConfigChanged(AppConfig oldConfig, AppConfig newConfig)
     {
+        _screenItem.Checked = newConfig.ScreenRecordingEnabled;
+
         if (oldConfig.Hotkey != newConfig.Hotkey)
         {
             RegisterHotkey(newConfig.Hotkey);
