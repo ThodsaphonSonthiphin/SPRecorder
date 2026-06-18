@@ -19,6 +19,12 @@ public static partial class FileNameBuilder
         return Sanitize(result);
     }
 
+    public static string BuildScreen(string pattern, DateTime timestamp)
+    {
+        var baseName = Build(pattern, timestamp, "screen");
+        return Path.ChangeExtension(baseName, ".mp4");
+    }
+
     private static string Sanitize(string fileName)
     {
         var invalid = Path.GetInvalidFileNameChars();

@@ -35,4 +35,20 @@ public class FileNameBuilderTests
         var name = FileNameBuilder.Build("rec_{track}.mp3", T, "system");
         Assert.Equal("rec_system.mp3", name);
     }
+
+    [Fact]
+    public void BuildScreen_ForcesMp4Extension()
+    {
+        var ts = new DateTime(2026, 6, 18, 14, 3, 22);
+        var name = FileNameBuilder.BuildScreen("{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3", ts);
+        Assert.Equal("2026-06-18_14-03-22_screen.mp4", name);
+    }
+
+    [Fact]
+    public void BuildScreen_AddsMp4_WhenPatternHasNoExtension()
+    {
+        var ts = new DateTime(2026, 6, 18, 14, 3, 22);
+        var name = FileNameBuilder.BuildScreen("{timestamp:yyyy-MM-dd}_{track}", ts);
+        Assert.Equal("2026-06-18_screen.mp4", name);
+    }
 }
