@@ -66,6 +66,12 @@ The keyboard part of the input highlight — a KeyCastr-style caption showing th
 keys pressed. Shows every key (privacy trade-off accepted; see ADR 0003).
 _Avoid_: keylogger, key display
 
+**Inactive hotkey**:
+A configured global hotkey whose `RegisterHotKey` call failed because another app
+already owns the combo — so pressing it does nothing until the user rebinds it. Its
+status comes from `GlobalHotkey.IsRegistered`, not from a re-probe.
+_Avoid_: broken hotkey, disabled hotkey, dead key
+
 **Record-screen toggle**:
 The single opt-in switch for the `screen` track — a persisted setting reachable
 both from the Settings dialog and a checkable tray menu item. There is no
