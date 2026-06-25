@@ -165,12 +165,15 @@ internal sealed class TrayApp : ApplicationContext
         _pendingStamp = _session.CaptureStamp();
         var form = new MarkNoteInputForm(ChooseNoteMonitor());
         _noteForm = form;
-        form.Submitted += note => OnUi(() =>
+        // Submitted fires on the UI thread (KeyDown / FormClosed / CommitNow), so commit
+        // synchronously — a posted (async) commit would run AFTER Stop() has already closed
+        // and finalized the marker log, silently dropping the note.
+        form.Submitted += note =>
         {
             _session.AddMarker(note, _pendingStamp);
             _pendingStamp = null;
             _noteForm = null;
-        });
+        };
         form.Show();
     }
 
