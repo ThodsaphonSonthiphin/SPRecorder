@@ -167,7 +167,7 @@ internal sealed class TrayApp : ApplicationContext
         var status = CurrentHotkeyStatus();
         _hotkeyConflictItem.Visible = status.AnyInactive;
         if (status.AnyInactive)
-            _hotkeyConflictItem.Text = $"⚠ {string.Join(", ", status.InactiveLabels())} hotkey inactive — open Settings";
+            _hotkeyConflictItem.Text = $"⚠ {string.Join(", ", status.InactiveLabels())} inactive — open Settings";
 
         ApplyTrayIcon();
 
