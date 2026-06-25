@@ -7,6 +7,11 @@ public sealed record AppConfig
     public string OutputDirectory { get; init; } = "%USERPROFILE%\\Documents\\SPRecorder";
     public string FileNamePattern { get; init; } = "{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3";
     public string Hotkey { get; init; } = "Ctrl+Alt+R";
+
+    public string QuickMarkHotkey    { get; init; } = "Ctrl+Alt+M";
+    public string MarkWithNoteHotkey { get; init; } = "Ctrl+Alt+N";
+    public string MarkerLogFormat    { get; init; } = "Markdown";   // "Markdown" | "Csv"
+
     public int Mp3BitrateKbps { get; init; } = 96;
 
     public string MicrophoneDeviceId  { get; init; } = "";
@@ -45,6 +50,7 @@ public sealed record AppConfig
             SplitSizeMb      = Math.Clamp(raw.SplitSizeMb,      1, 10000),
             ScreenFrameRate = NearestFrameRate(raw.ScreenFrameRate),
             ScreenQuality   = raw.ScreenQuality is "Low" or "Medium" or "High" ? raw.ScreenQuality : "Medium",
+            MarkerLogFormat = raw.MarkerLogFormat is "Markdown" or "Csv" ? raw.MarkerLogFormat : "Markdown",
         };
     }
 

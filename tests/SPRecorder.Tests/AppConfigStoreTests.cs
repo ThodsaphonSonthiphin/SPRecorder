@@ -210,4 +210,57 @@ public class AppConfigStoreTests
             if (File.Exists(path)) File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Save_RoundtripsMarkerFields()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sprec_cfg_{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new AppConfigStore(path, new AppConfig());
+            store.Save(new AppConfig
+            {
+                QuickMarkHotkey = "Ctrl+Alt+M",
+                MarkWithNoteHotkey = "Ctrl+Alt+N",
+                MarkerLogFormat = "Csv",
+            });
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            var root = doc.RootElement;
+            Assert.Equal("Ctrl+Alt+M", root.GetProperty("QuickMarkHotkey").GetString());
+            Assert.Equal("Ctrl+Alt+N", root.GetProperty("MarkWithNoteHotkey").GetString());
+            Assert.Equal("Csv", root.GetProperty("MarkerLogFormat").GetString());
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
+    public void Load_NormalizesInvalidMarkerLogFormat_ToMarkdown()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sprec_cfg_{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, """
+            { "MarkerLogFormat": "yaml" }
+            """);
+            var loaded = AppConfig.Load(new ConfigurationBuilder().AddJsonFile(path).Build());
+            Assert.Equal("Markdown", loaded.MarkerLogFormat);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
+    public void Load_KeepsValidMarkerLogFormat()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sprec_cfg_{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, """
+            { "MarkerLogFormat": "Csv" }
+            """);
+            var loaded = AppConfig.Load(new ConfigurationBuilder().AddJsonFile(path).Build());
+            Assert.Equal("Csv", loaded.MarkerLogFormat);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
 }
