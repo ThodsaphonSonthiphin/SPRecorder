@@ -6,7 +6,6 @@ namespace SPRecorder.Hotkey;
 public sealed class GlobalHotkey : IDisposable
 {
     private const int WM_HOTKEY = 0x0312;
-    private const int HotkeyId = 9000;
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -18,20 +17,22 @@ public sealed class GlobalHotkey : IDisposable
 
     private readonly HotkeyWindow _window;
     private readonly bool _registered;
+    private readonly int _id;
 
     public bool IsRegistered => _registered;
     public event Action? Pressed;
 
-    public GlobalHotkey(ParsedHotkey hotkey)
+    public GlobalHotkey(ParsedHotkey hotkey, int id = 9000)
     {
+        _id = id;
         _window = new HotkeyWindow();
         _window.HotkeyPressed += () => Pressed?.Invoke();
-        _registered = RegisterHotKey(_window.Handle, HotkeyId, (uint)hotkey.Modifiers, (uint)hotkey.Key);
+        _registered = RegisterHotKey(_window.Handle, _id, (uint)hotkey.Modifiers, (uint)hotkey.Key);
     }
 
     public void Dispose()
     {
-        if (_registered) UnregisterHotKey(_window.Handle, HotkeyId);
+        if (_registered) UnregisterHotKey(_window.Handle, _id);
         _window.DestroyHandle();
     }
 
