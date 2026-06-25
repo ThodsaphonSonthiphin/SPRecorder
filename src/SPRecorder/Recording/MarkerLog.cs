@@ -50,6 +50,10 @@ public sealed class MarkerLog : IDisposable
 
     public void Dispose() => Close();
 
+    /// <remarks>
+    /// Call <see cref="Close"/> on the owning MarkerLog instance before invoking this:
+    /// it reads then rewrites the file and must not run while the append writer is open.
+    /// </remarks>
     public static void FinalizeMarkdownTitle(string path, string? label, DateTime startedAt, int count)
     {
         if (!File.Exists(path)) return;
@@ -59,7 +63,7 @@ public sealed class MarkerLog : IDisposable
         sb.AppendLine($"{startedAt:yyyy-MM-dd HH:mm:ss} · {count} {(count == 1 ? "marker" : "markers")}");
         sb.AppendLine();
         foreach (var l in lines) sb.AppendLine(l);
-        File.WriteAllText(path, sb.ToString());
+        File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
     }
 
     public static string MarkdownLine(int seq, MarkerStamp stamp, string? note)

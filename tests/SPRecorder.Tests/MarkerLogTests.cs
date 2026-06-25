@@ -29,6 +29,13 @@ public class MarkerLogTests
     }
 
     [Fact]
+    public void MarkdownLine_MultiHourElapsed()
+    {
+        var line = MarkerLog.MarkdownLine(1, Stamp(2, 5, 10, 16, 0, 0), null);
+        Assert.Equal("- **#1 · 02:05:10** _(16:00:00)_", line);
+    }
+
+    [Fact]
     public void CsvRow_PlainNote()
     {
         var row = MarkerLog.CsvRow(1, Stamp(0, 12, 34, 14, 32, 39), "budget cut");
@@ -40,6 +47,13 @@ public class MarkerLogTests
     {
         var row = MarkerLog.CsvRow(2, Stamp(0, 41, 52, 15, 2, 0), "cut, \"again\"");
         Assert.Equal("2,00:41:52,15:02:00,\"cut, \"\"again\"\"\"", row);
+    }
+
+    [Fact]
+    public void CsvRow_NullNote_TrailingEmptyField()
+    {
+        var row = MarkerLog.CsvRow(1, Stamp(0, 1, 0, 14, 32, 39), null);
+        Assert.Equal("1,00:01:00,14:32:39,", row);
     }
 
     [Theory]
