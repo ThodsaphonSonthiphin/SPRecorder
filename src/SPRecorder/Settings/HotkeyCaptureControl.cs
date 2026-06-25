@@ -49,6 +49,17 @@ internal sealed class HotkeyCaptureControl : UserControl
         HasConflict = false;
     }
 
+    /// <summary>
+    /// Show (or clear) an externally-determined "inactive" hint for the loaded hotkey,
+    /// WITHOUT probing — the authoritative source is the app's own GlobalHotkey.IsRegistered.
+    /// Re-probing here would always report a conflict for a combo the app already owns.
+    /// </summary>
+    public void SetInactiveStatus(bool inactive)
+    {
+        HasConflict = inactive;
+        _conflictHint.Text = inactive ? "  ⚠  Currently inactive — in use by another app" : "";
+    }
+
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public bool HasConflict { get; private set; }
