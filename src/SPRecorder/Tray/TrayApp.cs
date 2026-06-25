@@ -20,6 +20,8 @@ internal sealed class TrayApp : ApplicationContext
     private GlobalHotkey? _markWithNoteHotkey;
     private readonly Icon _idleIcon;
     private readonly Icon _recIcon;
+    private readonly Icon _idleIconBadged;
+    private readonly Icon _recIconBadged;
     private readonly System.Windows.Forms.Timer _tooltipTimer;
     private readonly ToolStripMenuItem _toggleItem;
     private readonly ToolStripMenuItem _statusItem;
@@ -30,6 +32,7 @@ internal sealed class TrayApp : ApplicationContext
     private CallEndConfirmation? _callEndToast;
     private ToolStripMenuItem _quickMarkItem = null!;
     private ToolStripMenuItem _noteMarkItem = null!;
+    private ToolStripMenuItem _hotkeyConflictItem = null!;
     private MarkNoteInputForm? _noteForm;
     private MarkerStamp? _pendingStamp;
     private int _markerCount;
@@ -42,6 +45,8 @@ internal sealed class TrayApp : ApplicationContext
         _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
         _idleIcon = IconFactory.CreateCircle(Color.Gray);
         _recIcon  = IconFactory.CreateCircle(Color.FromArgb(198, 40, 40));
+        _idleIconBadged = IconFactory.CreateCircleWithBadge(Color.Gray, Color.FromArgb(255, 193, 7));
+        _recIconBadged  = IconFactory.CreateCircleWithBadge(Color.FromArgb(198, 40, 40), Color.FromArgb(255, 193, 7));
 
         _session = new RecordingSession(() => _store.Current, PromptForSessionName);
         _session.StateChanged    += OnStateChanged;
@@ -66,10 +71,15 @@ internal sealed class TrayApp : ApplicationContext
         };
         _quickMarkItem = new ToolStripMenuItem("Add marker", null, (_, _) => OnQuickMark()) { Enabled = false };
         _noteMarkItem  = new ToolStripMenuItem("Add marker with note…", null, (_, _) => OnMarkWithNote()) { Enabled = false };
+        _hotkeyConflictItem = new ToolStripMenuItem("⚠ Hotkey(s) inactive — open Settings", null, (_, _) => OpenSettings())
+        {
+            Visible = false,
+        };
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(_toggleItem);
         menu.Items.Add(_statusItem);
+        menu.Items.Add(_hotkeyConflictItem);
         menu.Items.Add(_screenItem);
         menu.Items.Add(_quickMarkItem);
         menu.Items.Add(_noteMarkItem);
@@ -108,6 +118,16 @@ internal sealed class TrayApp : ApplicationContext
         _startStopHotkey    = MakeHotkey(cfg.Hotkey,            9000, ToggleRecording);
         _quickMarkHotkey    = MakeHotkey(cfg.QuickMarkHotkey,   9001, OnQuickMark);
         _markWithNoteHotkey = MakeHotkey(cfg.MarkWithNoteHotkey, 9002, OnMarkWithNote);
+
+        var status = CurrentHotkeyStatus();
+        if (status.AnyInactive)
+        {
+            var labels = string.Join(", ", status.InactiveLabels());
+            ShowBalloon(ToolTipIcon.Warning, $"{status.InactiveLabels().Count} hotkey(s) inactive",
+                $"{labels} couldn't register (in use by another app). Open Settings to fix.");
+        }
+
+        RefreshHotkeyStatusIndicators();
     }
 
     private GlobalHotkey? MakeHotkey(string spec, int id, Action onPressed)
@@ -117,16 +137,44 @@ internal sealed class TrayApp : ApplicationContext
             var parsed = HotkeyParser.Parse(spec);
             var hk = new GlobalHotkey(parsed, id);
             hk.Pressed += onPressed;
-            if (!hk.IsRegistered)
-                ShowBalloon(ToolTipIcon.Warning, "Hotkey conflict",
-                    $"{spec} is in use by another app. Use the tray menu, or change it in Settings.");
             return hk;
         }
-        catch (Exception ex)
+        catch
         {
-            ShowBalloon(ToolTipIcon.Warning, "Hotkey error", ex.Message);
-            return null;
+            return null;   // unparseable spec → inactive (surfaced by the consolidated indicators)
         }
+    }
+
+    private HotkeyStatus CurrentHotkeyStatus() => new(
+        _startStopHotkey    is { IsRegistered: true },
+        _quickMarkHotkey    is { IsRegistered: true },
+        _markWithNoteHotkey is { IsRegistered: true });
+
+    private void ApplyTrayIcon()
+    {
+        bool recording = _session.CurrentState == RecordingSession.State.Recording;
+        bool inactive  = CurrentHotkeyStatus().AnyInactive;
+        _notifyIcon.Icon = recording
+            ? (inactive ? _recIconBadged : _recIcon)
+            : (inactive ? _idleIconBadged : _idleIcon);
+    }
+
+    private string HotkeyConflictSuffix()
+        => CurrentHotkeyStatus().AnyInactive ? " · ⚠ hotkey inactive" : "";
+
+    private void RefreshHotkeyStatusIndicators()
+    {
+        var status = CurrentHotkeyStatus();
+        _hotkeyConflictItem.Visible = status.AnyInactive;
+        if (status.AnyInactive)
+            _hotkeyConflictItem.Text = $"⚠ {string.Join(", ", status.InactiveLabels())} hotkey inactive — open Settings";
+
+        ApplyTrayIcon();
+
+        if (_session.CurrentState == RecordingSession.State.Recording)
+            UpdateTooltip();
+        else
+            _notifyIcon.Text = "SPRecorder — idle" + HotkeyConflictSuffix();
     }
 
     private void ToggleRecording()
@@ -273,7 +321,7 @@ internal sealed class TrayApp : ApplicationContext
     private void OpenSettings()
     {
         var isRecording = _session.CurrentState == RecordingSession.State.Recording;
-        using var form = new SettingsForm(_store.Current, isRecording);
+        using var form = new SettingsForm(_store.Current, isRecording, CurrentHotkeyStatus());
         if (form.ShowDialog() == DialogResult.OK && form.Result is { } updated)
             _store.Save(updated);
     }
@@ -288,7 +336,7 @@ internal sealed class TrayApp : ApplicationContext
     {
         if (state == RecordingSession.State.Recording)
         {
-            _notifyIcon.Icon = _recIcon;
+            ApplyTrayIcon();
             _toggleItem.Text = "Stop recording";
             _tooltipTimer.Start();
             _markerCount = 0;
@@ -299,10 +347,10 @@ internal sealed class TrayApp : ApplicationContext
         }
         else
         {
-            _notifyIcon.Icon = _idleIcon;
+            ApplyTrayIcon();
             _toggleItem.Text = "Start recording";
             _tooltipTimer.Stop();
-            _notifyIcon.Text = "SPRecorder — idle";
+            _notifyIcon.Text = "SPRecorder — idle" + HotkeyConflictSuffix();
             _statusItem.Text = "Idle";
             _quickMarkItem.Enabled = false;
             _noteMarkItem.Enabled = false;
@@ -343,7 +391,7 @@ internal sealed class TrayApp : ApplicationContext
     {
         var elapsed = _session.Elapsed ?? TimeSpan.Zero;
         var markers = _markerCount > 0 ? $" · {_markerCount} markers" : "";
-        var text = $"Recording… {elapsed:hh\\:mm\\:ss}{markers}";
+        var text = $"Recording… {elapsed:hh\\:mm\\:ss}{markers}{HotkeyConflictSuffix()}";
         _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
         _statusItem.Text = $"Recording for {elapsed:hh\\:mm\\:ss}{markers}";
     }
@@ -388,6 +436,8 @@ internal sealed class TrayApp : ApplicationContext
         _notifyIcon.Dispose();
         _idleIcon.Dispose();
         _recIcon.Dispose();
+        _idleIconBadged.Dispose();
+        _recIconBadged.Dispose();
         base.ExitThreadCore();
     }
 }
