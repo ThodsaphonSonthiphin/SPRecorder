@@ -58,6 +58,11 @@ internal sealed class SettingsForm : Form
     private CheckBox _showKeystrokes = null!;
     private GroupBox _screenDetails = null!;
 
+    private HotkeyCaptureControl _quickMarkHotkey = null!;
+    private HotkeyCaptureControl _markWithNoteHotkey = null!;
+    private RadioButton _markerMarkdown = null!;
+    private RadioButton _markerCsv = null!;
+
     public SettingsForm(AppConfig initial, bool isRecording)
     {
         _initial = initial;
@@ -83,6 +88,7 @@ internal sealed class SettingsForm : Form
         tabs.TabPages.Add(BuildMixedTab());
         tabs.TabPages.Add(BuildSplittingTab());
         tabs.TabPages.Add(BuildScreenTab());
+        tabs.TabPages.Add(BuildMarkersTab());
 
         // Order matters: Bottom-docked controls must be added BEFORE Fill,
         // otherwise the Fill control claims the entire ClientArea and the
@@ -533,6 +539,49 @@ internal sealed class SettingsForm : Form
         return page;
     }
 
+    // ---------- Markers tab ----------
+    private TabPage BuildMarkersTab()
+    {
+        var page = new TabPage("Markers") { Padding = new Padding(TabPad) };
+        var y = TabPad;
+
+        page.Controls.Add(MakeLabel("Quick-mark hotkey", TabPad, y));
+        y += 22 + LabelToInput;
+        _quickMarkHotkey = new HotkeyCaptureControl { Location = new Point(TabPad, y), Size = new Size(InputWidth, 56) };
+        page.Controls.Add(_quickMarkHotkey);
+        y += 56 + 2;
+        page.Controls.Add(MakeHint("Drops a marker instantly — no popup, no focus change.", TabPad, y));
+        y += 18 + FieldGap;
+
+        page.Controls.Add(MakeLabel("Mark-with-note hotkey", TabPad, y));
+        y += 22 + LabelToInput;
+        _markWithNoteHotkey = new HotkeyCaptureControl { Location = new Point(TabPad, y), Size = new Size(InputWidth, 56) };
+        page.Controls.Add(_markWithNoteHotkey);
+        y += 56 + 2;
+        page.Controls.Add(MakeHint("Opens a small note box (off the recorded monitor). Enter saves, Esc keeps the marker without a note.", TabPad, y));
+        y += 18 + FieldGap;
+
+        page.Controls.Add(MakeLabel("Marker log format", TabPad, y));
+        y += 22 + LabelToInput;
+        _markerMarkdown = new RadioButton
+        {
+            Text = "Markdown (.md) — readable, paste into an AI summary",
+            Location = new Point(TabPad + 6, y),
+            Size = new Size(InputWidth - 12, 24),
+        };
+        page.Controls.Add(_markerMarkdown);
+        y += 26;
+        _markerCsv = new RadioButton
+        {
+            Text = "CSV (.csv) — open in Excel",
+            Location = new Point(TabPad + 6, y),
+            Size = new Size(InputWidth - 12, 24),
+        };
+        page.Controls.Add(_markerCsv);
+
+        return page;
+    }
+
     private void PopulateMonitors()
     {
         _screenMonitor.Items.Clear();
@@ -645,6 +694,11 @@ internal sealed class SettingsForm : Form
         _outputDir.Text = cfg.OutputDirectory;
         _fileNamePattern.Text = cfg.FileNamePattern;
         _hotkey.SetInitialHotkey(cfg.Hotkey);
+        _quickMarkHotkey.SetInitialHotkey(cfg.QuickMarkHotkey);
+        _markWithNoteHotkey.SetInitialHotkey(cfg.MarkWithNoteHotkey);
+        var csv = cfg.MarkerLogFormat.Equals("Csv", StringComparison.OrdinalIgnoreCase);
+        _markerCsv.Checked = csv;
+        _markerMarkdown.Checked = !csv;
 
         SelectComboByValue(_bitrate, cfg.Mp3BitrateKbps,
             o => ((BitrateOption)o!).Kbps);
@@ -735,8 +789,11 @@ internal sealed class SettingsForm : Form
         if (string.IsNullOrWhiteSpace(_fileNamePattern.Text) || !_fileNamePattern.Text.Contains("{track}"))
             errors.Add("File name pattern must contain {track}.");
 
-        try { HotkeyParser.Parse(_hotkey.Hotkey); }
-        catch (Exception ex) { errors.Add("Hotkey: " + ex.Message); }
+        var hotkeyError = HotkeyValidation.Validate(
+            ("Start/stop", _hotkey.Hotkey),
+            ("Quick-mark", _quickMarkHotkey.Hotkey),
+            ("Mark with note", _markWithNoteHotkey.Hotkey));
+        if (hotkeyError != null) errors.Add(hotkeyError);
 
         if (errors.Count > 0)
         {
@@ -755,6 +812,9 @@ internal sealed class SettingsForm : Form
             OutputDirectory = _outputDir.Text,
             FileNamePattern = _fileNamePattern.Text,
             Hotkey = _hotkey.Hotkey,
+            QuickMarkHotkey = _quickMarkHotkey.Hotkey,
+            MarkWithNoteHotkey = _markWithNoteHotkey.Hotkey,
+            MarkerLogFormat = _markerCsv.Checked ? "Csv" : "Markdown",
             Mp3BitrateKbps = bitrate,
             MicrophoneDeviceId = micId,
             SystemAudioDeviceId = renderId,
