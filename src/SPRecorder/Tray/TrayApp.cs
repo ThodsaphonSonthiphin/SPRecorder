@@ -122,9 +122,9 @@ internal sealed class TrayApp : ApplicationContext
         var status = CurrentHotkeyStatus();
         if (status.AnyInactive)
         {
-            var labels = string.Join(", ", status.InactiveLabels());
-            ShowBalloon(ToolTipIcon.Warning, $"{status.InactiveLabels().Count} hotkey(s) inactive",
-                $"{labels} couldn't register (in use by another app). Open Settings to fix.");
+            var inactive = status.InactiveLabels();
+            ShowBalloon(ToolTipIcon.Warning, $"{inactive.Count} hotkey(s) inactive",
+                $"{string.Join(", ", inactive)} couldn't register (in use by another app). Open Settings to fix.");
         }
 
         RefreshHotkeyStatusIndicators();
