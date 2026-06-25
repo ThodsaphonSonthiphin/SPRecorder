@@ -82,6 +82,20 @@ The `OutputDirectory/<name>_<timestamp>/` folder created when the user opts into
 naming a recording. All tracks for that recording — including `screen` — move
 into it.
 
+## Markers
+
+**Marker**:
+A timestamped point of interest the user flags while a Recording Session is
+running, captured as an elapsed offset from session start with an optional short
+note. Used to find or summarize the important moments afterward.
+_Avoid_: bookmark, flag, chapter, cue point
+
+**Marker log**:
+The sidecar text file (one per Recording Session) that lists all Markers for that
+session. Kept separate from the tracks so it survives mixing and splitting, and so
+it can be handed to an AI summarizer as its own source.
+_Avoid_: marker file, notes file, index
+
 ## Drive delivery
 
 **Upload**:
