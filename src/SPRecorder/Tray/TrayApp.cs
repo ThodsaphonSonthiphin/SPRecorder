@@ -15,7 +15,9 @@ internal sealed class TrayApp : ApplicationContext
     private readonly NotifyIcon _notifyIcon;
     private readonly RecordingSession _session;
     private readonly CallDetector _callDetector;
-    private GlobalHotkey? _hotkey;
+    private GlobalHotkey? _startStopHotkey;
+    private GlobalHotkey? _quickMarkHotkey;
+    private GlobalHotkey? _markWithNoteHotkey;
     private readonly Icon _idleIcon;
     private readonly Icon _recIcon;
     private readonly System.Windows.Forms.Timer _tooltipTimer;
@@ -26,6 +28,11 @@ internal sealed class TrayApp : ApplicationContext
 
     private bool _autoStarted;
     private CallEndConfirmation? _callEndToast;
+    private ToolStripMenuItem _quickMarkItem = null!;
+    private ToolStripMenuItem _noteMarkItem = null!;
+    private MarkNoteInputForm? _noteForm;
+    private MarkerStamp? _pendingStamp;
+    private int _markerCount;
 
     public TrayApp(AppConfigStore store)
     {
@@ -41,12 +48,13 @@ internal sealed class TrayApp : ApplicationContext
         _session.Warning         += msg => OnUi(() => ShowBalloon(ToolTipIcon.Warning, "SPRecorder", msg));
         _session.MixingStarted   += () => OnUi(() => ShowBalloon(ToolTipIcon.Info, "Mixing tracks…", "Combining system + mic into one MP3 for AI summary."));
         _session.MixingCompleted += path => OnUi(() => OnMixingCompleted(path));
+        _session.MarkerAdded += (seq, elapsed) => OnUi(() => OnMarkerAdded(seq, elapsed));
 
         _callDetector = new CallDetector();
         _callDetector.CallStarted += () => OnUi(OnCallStarted);
         _callDetector.CallEnded   += () => OnUi(OnCallEnded);
 
-        _toggleItem = new ToolStripMenuItem("Start recording", null, (_, _) => _session.Toggle())
+        _toggleItem = new ToolStripMenuItem("Start recording", null, (_, _) => ToggleRecording())
         {
             ShortcutKeyDisplayString = _store.Current.Hotkey,
         };
@@ -56,11 +64,15 @@ internal sealed class TrayApp : ApplicationContext
             CheckOnClick = false,
             Checked = _store.Current.ScreenRecordingEnabled,
         };
+        _quickMarkItem = new ToolStripMenuItem("Add marker", null, (_, _) => OnQuickMark()) { Enabled = false };
+        _noteMarkItem  = new ToolStripMenuItem("Add marker with note…", null, (_, _) => OnMarkWithNote()) { Enabled = false };
 
         var menu = new ContextMenuStrip();
         menu.Items.Add(_toggleItem);
         menu.Items.Add(_statusItem);
         menu.Items.Add(_screenItem);
+        menu.Items.Add(_quickMarkItem);
+        menu.Items.Add(_noteMarkItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Open recordings folder", null, (_, _) => OpenFolder());
         menu.Items.Add("Settings…", null, (_, _) => OpenSettings());
@@ -75,9 +87,9 @@ internal sealed class TrayApp : ApplicationContext
             Text = "SPRecorder — idle",
             ContextMenuStrip = menu,
         };
-        _notifyIcon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) _session.Toggle(); };
+        _notifyIcon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ToggleRecording(); };
 
-        RegisterHotkey(_store.Current.Hotkey);
+        RegisterHotkeys();
 
         _tooltipTimer = new System.Windows.Forms.Timer { Interval = 1000 };
         _tooltipTimer.Tick += (_, _) => UpdateTooltip();
@@ -86,25 +98,101 @@ internal sealed class TrayApp : ApplicationContext
             _callDetector.Start();
     }
 
-    private void RegisterHotkey(string hotkeySpec)
+    private void RegisterHotkeys()
     {
-        _hotkey?.Dispose();
-        _hotkey = null;
+        var cfg = _store.Current;
+        _startStopHotkey?.Dispose();
+        _quickMarkHotkey?.Dispose();
+        _markWithNoteHotkey?.Dispose();
+
+        _startStopHotkey    = MakeHotkey(cfg.Hotkey,            9000, ToggleRecording);
+        _quickMarkHotkey    = MakeHotkey(cfg.QuickMarkHotkey,   9001, OnQuickMark);
+        _markWithNoteHotkey = MakeHotkey(cfg.MarkWithNoteHotkey, 9002, OnMarkWithNote);
+    }
+
+    private GlobalHotkey? MakeHotkey(string spec, int id, Action onPressed)
+    {
         try
         {
-            var parsed = HotkeyParser.Parse(hotkeySpec);
-            _hotkey = new GlobalHotkey(parsed);
-            _hotkey.Pressed += () => _session.Toggle();
-            if (!_hotkey.IsRegistered)
-            {
+            var parsed = HotkeyParser.Parse(spec);
+            var hk = new GlobalHotkey(parsed, id);
+            hk.Pressed += onPressed;
+            if (!hk.IsRegistered)
                 ShowBalloon(ToolTipIcon.Warning, "Hotkey conflict",
-                    $"{hotkeySpec} is in use by another app. Use the tray menu, or change Hotkey in Settings.");
-            }
+                    $"{spec} is in use by another app. Use the tray menu, or change it in Settings.");
+            return hk;
         }
         catch (Exception ex)
         {
             ShowBalloon(ToolTipIcon.Warning, "Hotkey error", ex.Message);
+            return null;
         }
+    }
+
+    private void ToggleRecording()
+    {
+        if (_session.CurrentState == RecordingSession.State.Recording)
+            StopRecording();
+        else
+            _session.Start();
+    }
+
+    private void StopRecording()
+    {
+        CommitPendingNote();   // write any open note's marker while still Recording
+        _session.Stop();
+    }
+
+    private void OnQuickMark()
+    {
+        if (_session.CurrentState != RecordingSession.State.Recording)
+        {
+            ShowBalloon(ToolTipIcon.Info, "SPRecorder", "Not recording — start first.");
+            return;
+        }
+        _session.AddMarker(note: null);
+    }
+
+    private void OnMarkWithNote()
+    {
+        if (_session.CurrentState != RecordingSession.State.Recording)
+        {
+            ShowBalloon(ToolTipIcon.Info, "SPRecorder", "Not recording — start first.");
+            return;
+        }
+        if (_noteForm != null) { _noteForm.Activate(); return; }  // one at a time
+
+        _pendingStamp = _session.CaptureStamp();
+        var form = new MarkNoteInputForm(ChooseNoteMonitor());
+        _noteForm = form;
+        form.Submitted += note => OnUi(() =>
+        {
+            _session.AddMarker(note, _pendingStamp);
+            _pendingStamp = null;
+            _noteForm = null;
+        });
+        form.Show();
+    }
+
+    private void CommitPendingNote() => _noteForm?.CommitNow();
+
+    private Screen ChooseNoteMonitor()
+    {
+        var recorded = _store.Current.ScreenMonitorDeviceName;
+        if (string.IsNullOrEmpty(recorded))
+            recorded = Screen.PrimaryScreen?.DeviceName ?? "";
+        var names = Screen.AllScreens.Select(s => s.DeviceName).ToList();
+        var pick = MarkNoteInputForm.PickNoteMonitorDeviceName(names, recorded);
+        foreach (var s in Screen.AllScreens)
+            if (s.DeviceName == pick) return s;
+        return Screen.PrimaryScreen!;
+    }
+
+    private void OnMarkerAdded(int seq, TimeSpan elapsed)
+    {
+        _markerCount = seq;
+        ShowBalloon(ToolTipIcon.Info, $"Marker #{seq}", $"{elapsed:hh\\:mm\\:ss}");
+        UpdateTooltip();
     }
 
     private void ToggleScreenSetting()
@@ -117,12 +205,16 @@ internal sealed class TrayApp : ApplicationContext
     {
         _screenItem.Checked = newConfig.ScreenRecordingEnabled;
 
-        if (oldConfig.Hotkey != newConfig.Hotkey)
+        bool hotkeysChanged =
+            oldConfig.Hotkey != newConfig.Hotkey ||
+            oldConfig.QuickMarkHotkey != newConfig.QuickMarkHotkey ||
+            oldConfig.MarkWithNoteHotkey != newConfig.MarkWithNoteHotkey;
+
+        if (hotkeysChanged)
         {
-            RegisterHotkey(newConfig.Hotkey);
+            RegisterHotkeys();
             _toggleItem.ShortcutKeyDisplayString = newConfig.Hotkey;
-            ShowBalloon(ToolTipIcon.Info, "Settings saved",
-                $"Hotkey changed to {newConfig.Hotkey}.");
+            ShowBalloon(ToolTipIcon.Info, "Settings saved", "Hotkeys updated.");
         }
         else
         {
@@ -196,6 +288,9 @@ internal sealed class TrayApp : ApplicationContext
             _notifyIcon.Icon = _recIcon;
             _toggleItem.Text = "Stop recording";
             _tooltipTimer.Start();
+            _markerCount = 0;
+            _quickMarkItem.Enabled = true;
+            _noteMarkItem.Enabled = true;
             UpdateTooltip();
             ShowBalloon(ToolTipIcon.Info, "Recording started", "System + microphone");
         }
@@ -206,6 +301,8 @@ internal sealed class TrayApp : ApplicationContext
             _tooltipTimer.Stop();
             _notifyIcon.Text = "SPRecorder — idle";
             _statusItem.Text = "Idle";
+            _quickMarkItem.Enabled = false;
+            _noteMarkItem.Enabled = false;
 
             // Reset auto-start tracking and dismiss any pending confirmation.
             _autoStarted = false;
@@ -242,9 +339,10 @@ internal sealed class TrayApp : ApplicationContext
     private void UpdateTooltip()
     {
         var elapsed = _session.Elapsed ?? TimeSpan.Zero;
-        var text = $"Recording… {elapsed:hh\\:mm\\:ss}";
+        var markers = _markerCount > 0 ? $" · {_markerCount} markers" : "";
+        var text = $"Recording… {elapsed:hh\\:mm\\:ss}{markers}";
         _notifyIcon.Text = text.Length > 63 ? text[..63] : text;
-        _statusItem.Text = $"Recording for {elapsed:hh\\:mm\\:ss}";
+        _statusItem.Text = $"Recording for {elapsed:hh\\:mm\\:ss}{markers}";
     }
 
     private void OpenFolder()
@@ -276,7 +374,10 @@ internal sealed class TrayApp : ApplicationContext
     protected override void ExitThreadCore()
     {
         _tooltipTimer.Stop();
-        _hotkey?.Dispose();
+        CommitPendingNote();
+        _startStopHotkey?.Dispose();
+        _quickMarkHotkey?.Dispose();
+        _markWithNoteHotkey?.Dispose();
         _callDetector.Dispose();
         _callEndToast?.Close();
         _session.Dispose();
