@@ -19,6 +19,7 @@ internal sealed class SettingsForm : Form
 
     private readonly AppConfig _initial;
     private readonly bool _isRecording;
+    private readonly HotkeyStatus? _hotkeyStatus;
 
     public AppConfig? Result { get; private set; }
 
@@ -63,10 +64,11 @@ internal sealed class SettingsForm : Form
     private RadioButton _markerMarkdown = null!;
     private RadioButton _markerCsv = null!;
 
-    public SettingsForm(AppConfig initial, bool isRecording)
+    public SettingsForm(AppConfig initial, bool isRecording, HotkeyStatus? hotkeyStatus = null)
     {
         _initial = initial;
         _isRecording = isRecording;
+        _hotkeyStatus = hotkeyStatus;
 
         Text = "SPRecorder — Settings";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -696,6 +698,14 @@ internal sealed class SettingsForm : Form
         _hotkey.SetInitialHotkey(cfg.Hotkey);
         _quickMarkHotkey.SetInitialHotkey(cfg.QuickMarkHotkey);
         _markWithNoteHotkey.SetInitialHotkey(cfg.MarkWithNoteHotkey);
+
+        if (_hotkeyStatus is { } hs)
+        {
+            _hotkey.SetInactiveStatus(!hs.StartStop);
+            _quickMarkHotkey.SetInactiveStatus(!hs.QuickMark);
+            _markWithNoteHotkey.SetInactiveStatus(!hs.MarkWithNote);
+        }
+
         var csv = cfg.MarkerLogFormat.Equals("Csv", StringComparison.OrdinalIgnoreCase);
         _markerCsv.Checked = csv;
         _markerMarkdown.Checked = !csv;
