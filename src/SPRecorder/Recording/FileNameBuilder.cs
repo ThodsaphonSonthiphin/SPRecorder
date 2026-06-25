@@ -25,6 +25,13 @@ public static partial class FileNameBuilder
         return Path.ChangeExtension(baseName, ".mp4");
     }
 
+    public static string BuildMarker(string pattern, DateTime timestamp, string format)
+    {
+        var baseName = Build(pattern, timestamp, "markers");
+        var ext = format.Equals("Csv", StringComparison.OrdinalIgnoreCase) ? ".csv" : ".md";
+        return Path.ChangeExtension(baseName, ext);
+    }
+
     private static string Sanitize(string fileName)
     {
         var invalid = Path.GetInvalidFileNameChars();

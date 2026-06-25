@@ -51,4 +51,25 @@ public class FileNameBuilderTests
         var name = FileNameBuilder.BuildScreen("{timestamp:yyyy-MM-dd}_{track}", ts);
         Assert.Equal("2026-06-18_screen.mp4", name);
     }
+
+    [Fact]
+    public void BuildMarker_Markdown_ForcesMdExtension()
+    {
+        var name = FileNameBuilder.BuildMarker("{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3", T, "Markdown");
+        Assert.Equal("2026-04-27_14-30-22_markers.md", name);
+    }
+
+    [Fact]
+    public void BuildMarker_Csv_ForcesCsvExtension()
+    {
+        var name = FileNameBuilder.BuildMarker("{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3", T, "Csv");
+        Assert.Equal("2026-04-27_14-30-22_markers.csv", name);
+    }
+
+    [Fact]
+    public void BuildMarker_UnknownFormat_DefaultsToMd()
+    {
+        var name = FileNameBuilder.BuildMarker("{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3", T, "weird");
+        Assert.Equal("2026-04-27_14-30-22_markers.md", name);
+    }
 }
