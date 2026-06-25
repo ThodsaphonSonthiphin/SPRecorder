@@ -257,7 +257,7 @@ internal sealed class TrayApp : ApplicationContext
         {
             _callEndToast = null;
             if (_session.CurrentState == RecordingSession.State.Recording)
-                _session.Stop();
+                StopRecording();
         });
         _callEndToast.KeepRequested += () => OnUi(() =>
         {
