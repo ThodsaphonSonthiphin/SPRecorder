@@ -20,6 +20,8 @@ public sealed class RecordingSession : IDisposable
     private DateTime _startedAt;
     private ScreenRecorder? _screenRecorder;
     private InputHighlightOverlay? _overlay;
+    private MarkerLog? _markerLog;
+    private string? _sessionLabel;
 
     public State CurrentState { get; private set; } = State.Idle;
     public DateTime StartedAt => _startedAt;
@@ -27,12 +29,14 @@ public sealed class RecordingSession : IDisposable
     public string? MicFilePath { get; private set; }
     public string? MixedFilePath { get; private set; }
     public string? ScreenFilePath { get; private set; }
+    public string? MarkerLogPath { get; private set; }
 
     public event Action<State>? StateChanged;
     public event Action<string>? Warning;
     public event Action? MixingStarted;
     public event Action<string?>? MixingCompleted;
     public event Action<int>? SplitCompleted;  // arg = total chunks across all tracks
+    public event Action<int, TimeSpan>? MarkerAdded;  // (sequence, elapsed)
 
     public RecordingSession(Func<AppConfig> configGetter, Func<string?>? sessionNamePrompt = null)
     {
@@ -60,6 +64,11 @@ public sealed class RecordingSession : IDisposable
             FileNameBuilder.Build(_activeConfig.FileNamePattern, _startedAt, "mic"));
         MixedFilePath = Path.Combine(_activeConfig.OutputDirectory,
             FileNameBuilder.Build(_activeConfig.FileNamePattern, _startedAt, "mixed"));
+
+        MarkerLogPath = Path.Combine(_activeConfig.OutputDirectory,
+            FileNameBuilder.BuildMarker(_activeConfig.FileNamePattern, _startedAt, _activeConfig.MarkerLogFormat));
+        _markerLog = new MarkerLog(MarkerLogPath, _activeConfig.MarkerLogFormat);
+        _sessionLabel = null;
 
         _systemCapture = new SystemAudioCapture(_activeConfig.SystemAudioDeviceId);
         _micCapture = new MicrophoneCapture(_activeConfig.MicrophoneDeviceId);
@@ -161,11 +170,16 @@ public sealed class RecordingSession : IDisposable
         _screenRecorder = null;
         _overlay = null;
 
+        try { _markerLog?.Close(); } catch (Exception ex) { Warning?.Invoke("Marker log close: " + ex.Message); }
+
         CurrentState = State.Idle;
         StateChanged?.Invoke(CurrentState);
 
         if (_activeConfig.PromptForSessionName)
             TryRenameToSessionFolder();
+
+        if (_markerLog is { Count: > 0 } && !_markerLog.IsCsv && MarkerLogPath is not null)
+            MarkerLog.FinalizeMarkdownTitle(MarkerLogPath, _sessionLabel, _startedAt, _markerLog.Count);
 
         var willMix   = _activeConfig.MixedFileEnabled;
         var willSplit = !_activeConfig.SplitMode.Equals("None", StringComparison.OrdinalIgnoreCase);
@@ -182,6 +196,7 @@ public sealed class RecordingSession : IDisposable
         var rawName = _sessionNamePrompt();
         var clean = SessionNamePrompt.Sanitize(rawName ?? "");
         if (string.IsNullOrEmpty(clean)) return;
+        _sessionLabel = clean;
 
         var folderName = $"{clean}_{_startedAt:yyyy-MM-dd_HH-mm-ss}";
         var folder = Path.Combine(_activeConfig.OutputDirectory, folderName);
@@ -205,6 +220,14 @@ public sealed class RecordingSession : IDisposable
                 var newScreen = Path.Combine(folder, $"{folderName}_screen.mp4");
                 File.Move(ScreenFilePath, newScreen);
                 ScreenFilePath = newScreen;
+            }
+
+            if (MarkerLogPath is not null && File.Exists(MarkerLogPath))
+            {
+                var ext = Path.GetExtension(MarkerLogPath);
+                var newMarkers = Path.Combine(folder, $"{folderName}_markers{ext}");
+                File.Move(MarkerLogPath, newMarkers);
+                MarkerLogPath = newMarkers;
             }
         }
         catch (Exception ex)
@@ -281,6 +304,24 @@ public sealed class RecordingSession : IDisposable
         {
             Warning?.Invoke($"Split failed for {Path.GetFileName(path)}: {ex.Message}");
             return 0;
+        }
+    }
+
+    public MarkerStamp? CaptureStamp()
+        => CurrentState == State.Recording ? new MarkerStamp(DateTime.Now - _startedAt, DateTime.Now) : null;
+
+    public void AddMarker(string? note, MarkerStamp? stamp = null)
+    {
+        if (CurrentState != State.Recording || _markerLog is null) return;
+        var s = stamp ?? new MarkerStamp(DateTime.Now - _startedAt, DateTime.Now);
+        try
+        {
+            int seq = _markerLog.Append(s, note);
+            MarkerAdded?.Invoke(seq, s.Elapsed);
+        }
+        catch (Exception ex)
+        {
+            Warning?.Invoke("Marker could not be saved: " + ex.Message);
         }
     }
 
