@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Why SPRecorder runs with no install and no admin</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px;
+    background: #0a0e14; color: #e0e6ed;
+    font-family: 'Segoe UI', 'Sukhumvit Set', 'Tahoma', sans-serif;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  h1 { color: #5fb4ff; font-size: 22px; margin: 0 0 4px; }
+  h2 { color: #b8c4cf; font-size: 13px; font-weight: 400; margin: 0 0 18px; }
+  code { background: #1a2330; padding: 1px 5px; border-radius: 3px;
+         font-family: 'Consolas', monospace; color: #ffd479; font-size: 0.9em; }
+
+  .step-progress { display: flex; gap: 4px; justify-content: center;
+                   margin: 12px 0 14px; flex-wrap: wrap; }
+  .step-dot { width: 22px; height: 22px; border-radius: 50%;
+              background: #1a2330; color: #6b7785;
+              display: flex; align-items: center; justify-content: center;
+              font-size: 10px; font-weight: 700; transition: all 0.3s; }
+  .step-dot.done    { background: #1a3a5f; color: #5fb4ff; }
+  .step-dot.current { background: #5fb4ff; color: #0a0e14; transform: scale(1.2); }
+
+  .narration {
+    background: #1a2330; padding: 12px 18px; border-radius: 6px;
+    border-left: 3px solid #5fb4ff; margin-bottom: 16px;
+    font-size: 14.5px; line-height: 1.65; min-height: 60px;
+  }
+  .narration.warn    { border-color: #ffaa00; background: #2a2018; }
+  .narration.error   { border-color: #ff5757; background: #2a1818; }
+  .narration.success { border-color: #4ade80; background: #182a1f; }
+  .narration.magic   { border-color: #b070ff; background: #1f1830; }
+  .narration .step-title { color: #5fb4ff; font-weight: 700; font-size: 16px;
+                           display: block; margin-bottom: 6px; }
+  .narration.warn    .step-title { color: #ffd479; }
+  .narration.error   .step-title { color: #ff8888; }
+  .narration.success .step-title { color: #a3e8b9; }
+  .narration.magic   .step-title { color: #d4a4ff; }
+
+  .diagram-wrapper { background: #0f1419; border: 1px solid #1a2330;
+                     border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+  svg.diagram { width: 100%; height: auto; display: block; }
+
+  .comp rect {
+    fill: #1a2330; stroke: #2a3441; stroke-width: 2;
+    transition: all 0.4s;
+  }
+  .comp .comp-title {
+    font-family: 'Segoe UI', sans-serif; font-size: 14px; font-weight: 700;
+    fill: #b8c4cf; transition: fill 0.4s;
+  }
+  .comp .comp-sub {
+    font-family: 'Consolas', monospace; font-size: 11px;
+    fill: #6b7785; transition: fill 0.4s;
+  }
+  .comp .comp-val {
+    font-family: 'Consolas', monospace; font-size: 12px;
+    fill: #ffd479; transition: fill 0.4s;
+  }
+
+  .comp.active rect {
+    fill: #1a3a5f; stroke: #5fb4ff; stroke-width: 3;
+    filter: drop-shadow(0 0 8px #5fb4ff88);
+  }
+  .comp.active .comp-title { fill: #7ed4ff; }
+  .comp.active .comp-sub   { fill: #b8c4cf; }
+
+  .comp.firing rect {
+    fill: #2a2818; stroke: #ffd479; stroke-width: 3;
+    filter: drop-shadow(0 0 8px #ffd47988);
+    animation: pulse-fire 1.2s ease-in-out infinite;
+  }
+  .comp.firing .comp-title { fill: #ffd479; }
+  @keyframes pulse-fire {
+    0%, 100% { filter: drop-shadow(0 0 8px #ffd47988); }
+    50%      { filter: drop-shadow(0 0 16px #ffd479dd); }
+  }
+
+  .comp.locked rect {
+    fill: #2a1a3a; stroke: #b070ff; stroke-width: 3;
+    filter: drop-shadow(0 0 10px #b070ff88);
+  }
+  .comp.locked .comp-title { fill: #d4a4ff; }
+  .comp.locked .comp-val   { fill: #d4a4ff; }
+
+  .comp.done rect {
+    fill: #18301f; stroke: #4ade80; stroke-width: 2;
+  }
+  .comp.done .comp-title { fill: #a3e8b9; }
+  .comp.done .comp-val   { fill: #a3e8b9; }
+
+  .comp.error rect {
+    fill: #2a1818; stroke: #ff5757; stroke-width: 3;
+    filter: drop-shadow(0 0 10px #ff575788);
+  }
+  .comp.error .comp-title { fill: #ff8888; }
+
+  .comp.dimmed { opacity: 0.3; }
+
+  .arrow {
+    fill: none; stroke: #3d4a5f; stroke-width: 2;
+    transition: stroke 0.3s, stroke-width 0.3s;
+  }
+  .arrow.active {
+    stroke: #5fb4ff; stroke-width: 3;
+    stroke-dasharray: 8 4;
+    animation: flow 1.8s linear infinite;
+  }
+  .arrow.magic {
+    stroke: #b070ff; stroke-width: 3.5;
+    filter: drop-shadow(0 0 4px #b070ff);
+  }
+  .arrow.done  { stroke: #4ade80; stroke-width: 2.5; }
+  .arrow.error { stroke: #ff5757; stroke-width: 3; stroke-dasharray: 8 4;
+                 animation: flow 1.8s linear infinite; }
+  .arrow.dimmed { opacity: 0.16; }
+  @keyframes flow { to { stroke-dashoffset: -24; } }
+
+  .flow-label {
+    fill: #ffd479; font-family: 'Consolas', monospace;
+    font-size: 12px; font-weight: 700; pointer-events: none;
+  }
+  .flow-label-bg {
+    fill: #2a2818; stroke: #ffd479; stroke-width: 1.5;
+  }
+  .flow-label-group { opacity: 0; transition: opacity 0.3s; }
+  .flow-label-group.show { opacity: 1; }
+  .flow-label-group.magic .flow-label    { fill: #d4a4ff; }
+  .flow-label-group.magic .flow-label-bg { fill: #1f1830; stroke: #b070ff; }
+  .flow-label-group.error .flow-label    { fill: #ff8888; }
+  .flow-label-group.error .flow-label-bg { fill: #2a1818; stroke: #ff5757; }
+
+  .controls { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
+  button {
+    background: #5fb4ff; color: #0a0e14; border: none;
+    padding: 10px 22px; border-radius: 6px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  button:hover:not(:disabled)  { background: #7ec3ff; }
+  button:active:not(:disabled) { transform: scale(0.97); }
+  button.tertiary { background: #2a3441; color: #e0e6ed; }
+  button.tertiary:hover:not(:disabled) { background: #3a4451; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .step-badge {
+    background: #5fb4ff; color: #0a0e14;
+    padding: 3px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 700;
+    display: inline-block; margin-right: 8px;
+  }
+
+  .extra-panel {
+    background: #1a2330; border-radius: 6px; padding: 14px 18px;
+    margin-bottom: 16px; font-size: 14px; line-height: 1.6;
+  }
+  .extra-panel.race    { background: #2a1818; border: 2px solid #ff5757; }
+  .extra-panel.summary { background: #182a1f; border: 2px solid #4ade80; }
+  .extra-panel.question { background: #1f1830; border: 2px solid #b070ff; }
+  .extra-panel .ep-title { font-weight: 700; margin-bottom: 6px; }
+  .extra-panel.race .ep-title    { color: #ff8888; }
+  .extra-panel.summary .ep-title { color: #a3e8b9; }
+  .extra-panel.question .ep-title { color: #d4a4ff; }
+  .extra-panel ul { margin: 6px 0 0; padding-left: 20px; }
+  .extra-panel li { margin-bottom: 4px; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🪪 Why SPRecorder runs with <em>no install</em> and <em>no admin rights</em></h1>
+  <h2>Press <strong>Next →</strong> to see the one "admin line" that installing crosses — and how the portable app stays entirely below it.</h2>
+
+  <div class="step-progress" id="stepProgress"></div>
+
+  <div class="narration" id="narration">
+    <span class="step-badge" id="stepBadge">Step 0 / 0</span>
+    <span class="step-title" id="sceneTitle">Start</span>
+    <div id="narrationBody"></div>
+  </div>
+
+  <!-- ============ DIAGRAM (SVG) ============ -->
+  <div class="diagram-wrapper">
+    <svg class="diagram" viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead"        markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#3d4a5f"/>
+        </marker>
+        <marker id="arrowhead-active" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#5fb4ff"/>
+        </marker>
+        <marker id="arrowhead-magic"  markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#b070ff"/>
+        </marker>
+        <marker id="arrowhead-done"   markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#4ade80"/>
+        </marker>
+        <marker id="arrowhead-error"  markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#ff5757"/>
+        </marker>
+      </defs>
+
+      <!-- ===== static zone decorations (not interactive) ===== -->
+      <rect x="15" y="20"  width="970" height="215" rx="14" fill="#ff5757" opacity="0.06"/>
+      <rect x="15" y="300" width="970" height="285" rx="14" fill="#4ade80" opacity="0.05"/>
+      <text x="34" y="42" font-family="Segoe UI" font-size="12" font-weight="700" fill="#ff8888" opacity="0.8">ADMIN-ONLY — machine-wide, shared by all users</text>
+      <text x="34" y="322" font-family="Segoe UI" font-size="12" font-weight="700" fill="#a3e8b9" opacity="0.85">YOURS — no admin needed</text>
+      <line x1="30" y1="270" x2="970" y2="270" stroke="#ff5757" stroke-width="2" stroke-dasharray="10 6" opacity="0.75"/>
+      <text x="500" y="262" text-anchor="middle" font-family="Segoe UI" font-size="13" font-weight="700" fill="#ff8888">🔒 Administrator / UAC boundary</text>
+
+      <!-- ===== ADMIN ZONE (above the line) ===== -->
+      <g class="comp" id="compProtected">
+        <rect x="120" y="60" width="330" height="120" rx="10"/>
+        <text class="comp-title" x="285" y="97"  text-anchor="middle">🔒 C:\Program Files</text>
+        <text class="comp-sub"   x="285" y="121" text-anchor="middle">+ HKLM machine registry</text>
+        <text class="comp-sub"   x="285" y="143" text-anchor="middle">shared • Windows-protected</text>
+      </g>
+
+      <g class="comp" id="compRuntime">
+        <rect x="560" y="60" width="330" height="120" rx="10"/>
+        <text class="comp-title" x="725" y="97"  text-anchor="middle">🔒 Machine-wide .NET runtime</text>
+        <text class="comp-sub"   x="725" y="121" text-anchor="middle">installed once, for all users</text>
+        <text class="comp-sub"   x="725" y="143" text-anchor="middle">lives in a system folder</text>
+      </g>
+
+      <!-- ===== USER ZONE (below the line) ===== -->
+      <g class="comp" id="compZip">
+        <rect x="40" y="360" width="190" height="100" rx="10"/>
+        <text class="comp-title" x="135" y="400" text-anchor="middle">📦 SPRecorder.zip</text>
+        <text class="comp-sub"   x="135" y="424" text-anchor="middle">in your Downloads</text>
+      </g>
+
+      <g class="comp" id="compFolder">
+        <rect x="290" y="330" width="250" height="175" rx="10"/>
+        <text class="comp-title" x="415" y="362" text-anchor="middle">📂 SPRecorder folder</text>
+        <text class="comp-sub"   x="415" y="384" text-anchor="middle">(wherever YOU put it)</text>
+        <text class="comp-val"   x="415" y="416" text-anchor="middle">• SPRecorder.exe</text>
+        <text class="comp-val"   x="415" y="439" text-anchor="middle">• .NET runtime (bundled)</text>
+        <text class="comp-val"   x="415" y="462" text-anchor="middle">• ScreenRecorderLib.dll</text>
+      </g>
+
+      <g class="comp" id="compApp">
+        <rect x="600" y="360" width="190" height="100" rx="10"/>
+        <text class="comp-title" x="695" y="396" text-anchor="middle">▶ SPRecorder.exe</text>
+        <text class="comp-sub"   x="695" y="419" text-anchor="middle">running process</text>
+        <text class="comp-val"   x="695" y="444" text-anchor="middle" id="appState">state: idle</text>
+      </g>
+
+      <g class="comp" id="compDocs">
+        <rect x="820" y="360" width="160" height="100" rx="10"/>
+        <text class="comp-title" x="900" y="396" text-anchor="middle">🗂️ Documents</text>
+        <text class="comp-sub"   x="900" y="419" text-anchor="middle">\SPRecorder</text>
+        <text class="comp-sub"   x="900" y="441" text-anchor="middle">your recordings</text>
+      </g>
+
+      <!-- ===== arrows: portable path (stays below the line) ===== -->
+      <path class="arrow" id="arrZipFolder"  d="M 230 410 L 290 412" marker-end="url(#arrowhead)"/>
+      <path class="arrow" id="arrFolderApp"  d="M 540 412 L 600 410" marker-end="url(#arrowhead)"/>
+      <path class="arrow" id="arrAppDocs"    d="M 790 410 L 820 410" marker-end="url(#arrowhead)"/>
+
+      <!-- ===== arrows: what an INSTALLER would do (cross the line, admin) ===== -->
+      <path class="arrow" id="arrCrossProtected" d="M 380 330 L 300 180" marker-end="url(#arrowhead)"/>
+      <path class="arrow" id="arrCrossRuntime"   d="M 695 360 L 720 180" marker-end="url(#arrowhead)"/>
+
+      <!-- ===== flow labels ===== -->
+      <g class="flow-label-group" id="lblUnzip">
+        <rect class="flow-label-bg" x="228" y="380" width="64" height="22" rx="5"/>
+        <text class="flow-label"    x="260" y="396" text-anchor="middle">unzip</text>
+      </g>
+      <g class="flow-label-group" id="lblRun">
+        <rect class="flow-label-bg" x="548" y="380" width="48" height="22" rx="5"/>
+        <text class="flow-label"    x="572" y="396" text-anchor="middle">run</text>
+      </g>
+      <g class="flow-label-group" id="lblSave">
+        <rect class="flow-label-bg" x="758" y="376" width="92" height="22" rx="5"/>
+        <text class="flow-label"    x="804" y="392" text-anchor="middle">save MP3s</text>
+      </g>
+      <g class="flow-label-group" id="lblCrossProtected">
+        <rect class="flow-label-bg" x="286" y="238" width="120" height="22" rx="5"/>
+        <text class="flow-label"    x="346" y="254" text-anchor="middle">needs admin 🔒</text>
+      </g>
+      <g class="flow-label-group" id="lblCrossRuntime">
+        <rect class="flow-label-bg" x="648" y="238" width="120" height="22" rx="5"/>
+        <text class="flow-label"    x="708" y="254" text-anchor="middle">needs admin 🔒</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- ============ EXTRA PANELS ============ -->
+  <div class="extra-panel race hidden" id="racePanel">
+    <div class="ep-title">⚠️ What "installing" actually costs</div>
+    A normal installer copies your app into <code>C:\Program Files</code>, writes machine-wide
+    registry keys, and often installs the .NET runtime for all users. All three live
+    <strong>above the line</strong> — shared, Windows-protected areas — so Windows shows the
+    <strong>UAC prompt</strong> and blocks anyone without administrator rights.
+  </div>
+
+  <div class="extra-panel question hidden" id="questionPanel">
+    <div class="ep-title">💡 Key question</div>
+    Installing means crossing that admin line. So how can SPRecorder record meetings, save
+    files, and even start on login — all from a ZIP — <strong>without ever asking for admin?</strong>
+    What is it deliberately <em>not</em> doing?
+  </div>
+
+  <div class="extra-panel summary hidden" id="summaryPanel">
+    <div class="ep-title">📐 The trade-offs of being portable</div>
+    <ul>
+      <li>🆚 <strong>It isn't "installed":</strong> no Start Menu entry and no auto-update — you manage the folder yourself.</li>
+      <li>📦 <strong>Bigger download:</strong> self-contained carries the whole .NET runtime (~255 files). That heft is the price of needing nothing machine-wide.</li>
+      <li>🔁 <strong>Auto-start (still no admin):</strong> drop a shortcut into your <code>shell:startup</code> folder — that's inside your own profile too.</li>
+      <li>⚠️ <strong>SmartScreen still warns once:</strong> that's about the app being <em>unsigned</em> (trust), <em>not</em> admin. Click "More info → Run anyway".</li>
+      <li>🚫 <strong>Don't move it into Program Files:</strong> that location <em>does</em> need admin and would defeat the whole point.</li>
+    </ul>
+  </div>
+
+  <div class="controls">
+    <button id="prevBtn" class="tertiary" disabled>← Back</button>
+    <button id="nextBtn">Next →</button>
+    <button id="resetBtn" class="tertiary">↻ Reset</button>
+  </div>
+</div>
+
+<script>
+const COMPONENTS = ['compProtected', 'compRuntime', 'compZip', 'compFolder', 'compApp', 'compDocs'];
+const ARROWS     = ['arrZipFolder', 'arrFolderApp', 'arrAppDocs', 'arrCrossProtected', 'arrCrossRuntime'];
+const LABELS     = ['lblUnzip', 'lblRun', 'lblSave', 'lblCrossProtected', 'lblCrossRuntime'];
+
+function setComp(id, state) {
+  const el = document.getElementById(id);
+  if (el) el.setAttribute('class', 'comp' + (state ? ' ' + state : ''));
+}
+function setArrow(id, state) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.setAttribute('class', 'arrow' + (state ? ' ' + state : ''));
+  const markerMap = {
+    '':       'url(#arrowhead)',
+    'dimmed': 'url(#arrowhead)',
+    'active': 'url(#arrowhead-active)',
+    'magic':  'url(#arrowhead-magic)',
+    'done':   'url(#arrowhead-done)',
+    'error':  'url(#arrowhead-error)'
+  };
+  el.setAttribute('marker-end', markerMap[state] || 'url(#arrowhead)');
+}
+function setLabel(id, show, variant) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.setAttribute('class',
+    'flow-label-group' + (variant ? ' ' + variant : '') + (show ? ' show' : '')
+  );
+}
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function setNarration(cls, title, body) {
+  const n = document.getElementById('narration');
+  n.className = 'narration' + (cls ? ' ' + cls : '');
+  document.getElementById('sceneTitle').textContent = title;
+  document.getElementById('narrationBody').innerHTML = body;
+}
+
+function clearAllStates() {
+  COMPONENTS.forEach(c => setComp(c, ''));
+  ARROWS.forEach(a => setArrow(a, ''));
+  LABELS.forEach(l => setLabel(l, false));
+  setText('appState', 'state: idle');
+  document.querySelectorAll('.extra-panel').forEach(el => el.classList.add('hidden'));
+}
+
+/* keep the two admin-zone boxes shown as locked/protected */
+function lockAdmin() {
+  setComp('compProtected', 'locked');
+  setComp('compRuntime', 'locked');
+}
+
+/* =============================== SCENES =============================== */
+const scenes = [
+
+  // 0 — Overview
+  () => {
+    setNarration('', 'Overview — one line splits Windows in two', `
+      To see why SPRecorder needs no installer and no admin, picture Windows split by a single
+      line: the <strong>🔒 admin boundary</strong>.
+      Everything <strong>above</strong> it — <code>C:\\Program Files</code>, the machine
+      registry, the shared .NET runtime — is machine-wide and protected; touching it needs
+      <strong>administrator rights</strong> (the UAC pop-up). Everything <strong>below</strong>
+      it is yours. Press <strong>Next →</strong>.
+    `);
+    lockAdmin();
+  },
+
+  // 1 — what's above the line, and why it needs admin
+  () => {
+    setNarration('warn', 'Step 1 — Above the line is protected', `
+      <code>C:\\Program Files</code> and the <code>HKLM</code> registry are <strong>shared by
+      every user</strong> on the PC, so Windows guards them. Writing there is exactly what
+      makes a normal installer pop the <strong>"Do you want to allow changes?" (UAC)</strong>
+      prompt — it's asking for admin.
+    `);
+    setComp('compProtected', 'locked');
+    setComp('compRuntime', 'dimmed');
+  },
+
+  // 2 — the runtime is also an admin cost
+  () => {
+    setNarration('warn', 'Step 2 — The .NET runtime is usually admin too', `
+      Most .NET apps also assume the <strong>.NET runtime</strong> is already installed once,
+      machine-wide. Installing that is another admin action, in another protected system
+      folder — again, above the line.
+    `);
+    lockAdmin();
+  },
+
+  // 3 — traditional install CROSSES the line (counter-example)
+  () => {
+    setNarration('error', 'Step 3 — A normal "install" crosses the line', `
+      "Installing" literally means lifting your files <strong>up across the boundary</strong>:
+      into Program Files, into the registry, maybe installing the runtime. Every crossing trips
+      the admin gate. That is the cost SPRecorder is built to avoid (see the red box).
+    `);
+    lockAdmin();
+    setArrow('arrCrossProtected', 'error'); setLabel('lblCrossProtected', true, 'error');
+    setArrow('arrCrossRuntime', 'error');   setLabel('lblCrossRuntime', true, 'error');
+    show('racePanel');
+  },
+
+  // 4 — KEY QUESTION
+  () => {
+    setNarration('magic', 'Step 4 — Stop. What does the ZIP skip?', `
+      Before the answer, read the purple box. The trick is entirely about <em>which side of the
+      line</em> SPRecorder touches.
+    `);
+    lockAdmin();
+    setArrow('arrCrossProtected', 'dimmed');
+    setArrow('arrCrossRuntime', 'dimmed');
+    show('questionPanel');
+  },
+
+  // 5 — portable: unzip into a folder you own
+  () => {
+    setNarration('', 'Step 5 — Unzip into a folder YOU own', `
+      You extract <code>SPRecorder.zip</code> into a place you already control — Downloads,
+      Documents, the Desktop, even a USB stick. Writing into your own folders sits
+      <strong>below the line</strong>, so there is no admin gate to cross.
+    `);
+    lockAdmin();
+    setComp('compZip', 'firing');
+    setArrow('arrZipFolder', 'active'); setLabel('lblUnzip', true);
+    setComp('compFolder', 'active');
+  },
+
+  // 6 — the folder is self-sufficient (runtime bundled)
+  () => {
+    setNarration('success', 'Step 6 — The folder brings its own runtime', `
+      Because the app was published <strong>self-contained</strong>, the <strong>.NET runtime
+      is bundled inside this folder</strong>, right beside <code>SPRecorder.exe</code> and
+      <code>ScreenRecorderLib.dll</code>. So it needs <em>nothing</em> from the machine-wide
+      runtime above the line — that box can stay greyed out.
+    `);
+    setComp('compProtected', 'locked');
+    setComp('compRuntime', 'dimmed');
+    setArrow('arrCrossRuntime', 'dimmed');
+    setComp('compZip', 'done');
+    setArrow('arrZipFolder', 'done');
+    setComp('compFolder', 'active');
+  },
+
+  // 7 — run it
+  () => {
+    setNarration('', 'Step 7 — Double-click just starts a process', `
+      Double-clicking the launcher starts <code>SPRecorder.exe</code> from a file you already
+      own. <strong>Running a program needs no admin by itself</strong> — only writing to
+      protected places does. The app reads only its own folder.
+    `);
+    setComp('compProtected', 'dimmed');
+    setComp('compRuntime', 'dimmed');
+    setComp('compFolder', 'done');
+    setArrow('arrFolderApp', 'active'); setLabel('lblRun', true);
+    setComp('compApp', 'active');
+    setText('appState', 'state: running ✓');
+  },
+
+  // 8 — save output + the reveal
+  () => {
+    setNarration('success', 'Step 8 — It never crossed the line', `
+      Recordings are written to <code>Documents\\SPRecorder</code> — inside your own user
+      profile, below the line. Trace the whole path: <strong>unzip → run → save</strong>, and
+      it <strong>never once crosses the admin boundary</strong>. No protected location to write,
+      runtime carried along, output in your own folder ⇒ <strong>no install, no admin.</strong>
+    `);
+    setComp('compProtected', 'dimmed');
+    setComp('compRuntime', 'dimmed');
+    setArrow('arrCrossProtected', 'dimmed');
+    setArrow('arrCrossRuntime', 'dimmed');
+    setComp('compFolder', 'done');
+    setArrow('arrFolderApp', 'done');
+    setComp('compApp', 'done');
+    setText('appState', 'state: running ✓');
+    setArrow('arrAppDocs', 'active'); setLabel('lblSave', true);
+    setComp('compDocs', 'done');
+  },
+
+  // 9 — trade-offs
+  () => {
+    setNarration('success', 'Step 9 — The trade-offs', `
+      Portability isn't free. The green box lists what you give up to get "no install, no admin".
+      The big one: it lives wherever you unzip it, so keep the folder together and don't drop it
+      into Program Files.
+    `);
+    setComp('compProtected', 'dimmed');
+    setComp('compRuntime', 'dimmed');
+    setComp('compFolder', 'done');
+    setArrow('arrFolderApp', 'done');
+    setComp('compApp', 'done');
+    setText('appState', 'state: running ✓');
+    setArrow('arrAppDocs', 'done');
+    setComp('compDocs', 'done');
+    show('summaryPanel');
+  }
+];
+
+const TOTAL = scenes.length - 1;
+
+let currentStep = 0;
+function buildProgressDots() {
+  const progress = document.getElementById('stepProgress');
+  progress.innerHTML = '';
+  for (let i = 0; i <= TOTAL; i++) {
+    const d = document.createElement('div');
+    d.className = 'step-dot';
+    d.textContent = i;
+    d.id = 'dot' + i;
+    progress.appendChild(d);
+  }
+}
+function render(step) {
+  clearAllStates();
+  if (scenes[step]) scenes[step]();
+  for (let i = 0; i <= TOTAL; i++) {
+    const d = document.getElementById('dot' + i);
+    if (!d) continue;
+    d.classList.remove('done', 'current');
+    if (i < step)  d.classList.add('done');
+    if (i === step) d.classList.add('current');
+  }
+  document.getElementById('stepBadge').textContent = `Step ${step} / ${TOTAL}`;
+  document.getElementById('prevBtn').disabled = step === 0;
+  document.getElementById('nextBtn').disabled = step === TOTAL;
+}
+document.getElementById('prevBtn').onclick  = () => { if (currentStep > 0)     { currentStep--; render(currentStep); } };
+document.getElementById('nextBtn').onclick  = () => { if (currentStep < TOTAL) { currentStep++; render(currentStep); } };
+document.getElementById('resetBtn').onclick = () => { currentStep = 0; render(0); };
+
+buildProgressDots();
+render(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Why single-file publish breaks ScreenRecorderLib.dll</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px;
+    background: #0a0e14; color: #e0e6ed;
+    font-family: 'Segoe UI', 'Sukhumvit Set', 'Tahoma', sans-serif;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  h1 { color: #5fb4ff; font-size: 22px; margin: 0 0 4px; }
+  h2 { color: #b8c4cf; font-size: 13px; font-weight: 400; margin: 0 0 18px; }
+  code { background: #1a2330; padding: 1px 5px; border-radius: 3px;
+         font-family: 'Consolas', monospace; color: #ffd479; font-size: 0.9em; }
+
+  /* progress dots */
+  .step-progress { display: flex; gap: 4px; justify-content: center;
+                   margin: 12px 0 14px; flex-wrap: wrap; }
+  .step-dot { width: 22px; height: 22px; border-radius: 50%;
+              background: #1a2330; color: #6b7785;
+              display: flex; align-items: center; justify-content: center;
+              font-size: 10px; font-weight: 700; transition: all 0.3s; }
+  .step-dot.done    { background: #1a3a5f; color: #5fb4ff; }
+  .step-dot.current { background: #5fb4ff; color: #0a0e14; transform: scale(1.2); }
+
+  /* narration */
+  .narration {
+    background: #1a2330; padding: 12px 18px; border-radius: 6px;
+    border-left: 3px solid #5fb4ff; margin-bottom: 16px;
+    font-size: 14.5px; line-height: 1.65; min-height: 60px;
+  }
+  .narration.warn    { border-color: #ffaa00; background: #2a2018; }
+  .narration.error   { border-color: #ff5757; background: #2a1818; }
+  .narration.success { border-color: #4ade80; background: #182a1f; }
+  .narration.magic   { border-color: #b070ff; background: #1f1830; }
+  .narration .step-title { color: #5fb4ff; font-weight: 700; font-size: 16px;
+                           display: block; margin-bottom: 6px; }
+  .narration.warn    .step-title { color: #ffd479; }
+  .narration.error   .step-title { color: #ff8888; }
+  .narration.success .step-title { color: #a3e8b9; }
+  .narration.magic   .step-title { color: #d4a4ff; }
+
+  /* diagram container */
+  .diagram-wrapper { background: #0f1419; border: 1px solid #1a2330;
+                     border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+  svg.diagram { width: 100%; height: auto; display: block; }
+
+  /* SVG component (group) styles */
+  .comp rect {
+    fill: #1a2330; stroke: #2a3441; stroke-width: 2;
+    transition: all 0.4s;
+  }
+  .comp .comp-title {
+    font-family: 'Segoe UI', sans-serif; font-size: 14px; font-weight: 700;
+    fill: #b8c4cf; transition: fill 0.4s;
+  }
+  .comp .comp-sub {
+    font-family: 'Consolas', monospace; font-size: 11px;
+    fill: #6b7785; transition: fill 0.4s;
+  }
+  .comp .comp-val {
+    font-family: 'Consolas', monospace; font-size: 12px;
+    fill: #ffd479; transition: fill 0.4s;
+  }
+
+  /* component states */
+  .comp.active rect {
+    fill: #1a3a5f; stroke: #5fb4ff; stroke-width: 3;
+    filter: drop-shadow(0 0 8px #5fb4ff88);
+  }
+  .comp.active .comp-title { fill: #7ed4ff; }
+  .comp.active .comp-sub   { fill: #b8c4cf; }
+
+  .comp.firing rect {
+    fill: #2a2818; stroke: #ffd479; stroke-width: 3;
+    filter: drop-shadow(0 0 8px #ffd47988);
+    animation: pulse-fire 1.2s ease-in-out infinite;
+  }
+  .comp.firing .comp-title { fill: #ffd479; }
+  @keyframes pulse-fire {
+    0%, 100% { filter: drop-shadow(0 0 8px #ffd47988); }
+    50%      { filter: drop-shadow(0 0 16px #ffd479dd); }
+  }
+
+  .comp.locked rect {
+    fill: #2a1a3a; stroke: #b070ff; stroke-width: 3;
+    filter: drop-shadow(0 0 10px #b070ff88);
+  }
+  .comp.locked .comp-title { fill: #d4a4ff; }
+  .comp.locked .comp-val   { fill: #d4a4ff; }
+
+  .comp.blocked rect {
+    fill: #2a1f10; stroke: #ffaa00; stroke-width: 2;
+    animation: blink-block 1s ease-in-out infinite alternate;
+  }
+  .comp.blocked .comp-title { fill: #ffaa44; }
+  @keyframes blink-block {
+    from { opacity: 0.55; } to { opacity: 0.9; }
+  }
+
+  .comp.done rect {
+    fill: #18301f; stroke: #4ade80; stroke-width: 2;
+  }
+  .comp.done .comp-title { fill: #a3e8b9; }
+  .comp.done .comp-val   { fill: #a3e8b9; }
+
+  .comp.error rect {
+    fill: #2a1818; stroke: #ff5757; stroke-width: 3;
+    filter: drop-shadow(0 0 10px #ff575788);
+  }
+  .comp.error .comp-title { fill: #ff8888; }
+  .comp.error .comp-val   { fill: #ff8888; }
+
+  .comp.dimmed { opacity: 0.3; }
+
+  /* arrows */
+  .arrow {
+    fill: none; stroke: #3d4a5f; stroke-width: 2;
+    transition: stroke 0.3s, stroke-width 0.3s;
+  }
+  .arrow.active {
+    stroke: #5fb4ff; stroke-width: 3;
+    stroke-dasharray: 8 4;
+    animation: flow 1.8s linear infinite;
+  }
+  .arrow.magic {
+    stroke: #b070ff; stroke-width: 3.5;
+    filter: drop-shadow(0 0 4px #b070ff);
+  }
+  .arrow.done  { stroke: #4ade80; stroke-width: 2.5; }
+  .arrow.error { stroke: #ff5757; stroke-width: 3; stroke-dasharray: 8 4;
+                 animation: flow 1.8s linear infinite; }
+  .arrow.dimmed { opacity: 0.18; }
+  @keyframes flow { to { stroke-dashoffset: -24; } }
+
+  /* flow labels (values flying along arrows) */
+  .flow-label {
+    fill: #ffd479; font-family: 'Consolas', monospace;
+    font-size: 12px; font-weight: 700; pointer-events: none;
+  }
+  .flow-label-bg {
+    fill: #2a2818; stroke: #ffd479; stroke-width: 1.5;
+  }
+  .flow-label-group { opacity: 0; transition: opacity 0.3s; }
+  .flow-label-group.show { opacity: 1; }
+  .flow-label-group.magic .flow-label    { fill: #d4a4ff; }
+  .flow-label-group.magic .flow-label-bg { fill: #1f1830; stroke: #b070ff; }
+  .flow-label-group.error .flow-label    { fill: #ff8888; }
+  .flow-label-group.error .flow-label-bg { fill: #2a1818; stroke: #ff5757; }
+
+  /* controls */
+  .controls { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
+  button {
+    background: #5fb4ff; color: #0a0e14; border: none;
+    padding: 10px 22px; border-radius: 6px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  button:hover:not(:disabled)  { background: #7ec3ff; }
+  button:active:not(:disabled) { transform: scale(0.97); }
+  button.tertiary { background: #2a3441; color: #e0e6ed; }
+  button.tertiary:hover:not(:disabled) { background: #3a4451; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .step-badge {
+    background: #5fb4ff; color: #0a0e14;
+    padding: 3px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 700;
+    display: inline-block; margin-right: 8px;
+  }
+
+  /* extra/explanatory panels (declared once, shown per scene) */
+  .extra-panel {
+    background: #1a2330; border-radius: 6px; padding: 14px 18px;
+    margin-bottom: 16px; font-size: 14px; line-height: 1.6;
+  }
+  .extra-panel.race    { background: #2a1818; border: 2px solid #ff5757; }
+  .extra-panel.summary { background: #182a1f; border: 2px solid #4ade80; }
+  .extra-panel.question { background: #1f1830; border: 2px solid #b070ff; }
+  .extra-panel .ep-title { font-weight: 700; margin-bottom: 6px; }
+  .extra-panel.race .ep-title    { color: #ff8888; }
+  .extra-panel.summary .ep-title { color: #a3e8b9; }
+  .extra-panel.question .ep-title { color: #d4a4ff; }
+  .extra-panel ul { margin: 6px 0 0; padding-left: 20px; }
+  .extra-panel li { margin-bottom: 4px; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🧩 Why turning SPRecorder into one <code>.exe</code> broke <code>ScreenRecorderLib.dll</code></h1>
+  <h2>Press <strong>Next →</strong> to step through what the build produces, what the .NET loader tries to load, and exactly where it throws <code>BadImageFormatException</code>.</h2>
+
+  <div class="step-progress" id="stepProgress"></div>
+
+  <div class="narration" id="narration">
+    <span class="step-badge" id="stepBadge">Step 0 / 0</span>
+    <span class="step-title" id="sceneTitle">Start</span>
+    <div id="narrationBody"></div>
+  </div>
+
+  <!-- ============ DIAGRAM (SVG) ============ -->
+  <div class="diagram-wrapper">
+    <svg class="diagram" viewBox="0 0 1000 670" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead"        markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#3d4a5f"/>
+        </marker>
+        <marker id="arrowhead-active" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#5fb4ff"/>
+        </marker>
+        <marker id="arrowhead-magic"  markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#b070ff"/>
+        </marker>
+        <marker id="arrowhead-done"   markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#4ade80"/>
+        </marker>
+        <marker id="arrowhead-error"  markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <polygon points="0 0, 10 4, 0 8" fill="#ff5757"/>
+        </marker>
+      </defs>
+
+      <!-- ===== TIER 1: the two ingredients ===== -->
+      <g class="comp" id="compCode">
+        <rect x="110" y="30" width="260" height="92" rx="10"/>
+        <text class="comp-title" x="240" y="68" text-anchor="middle">📄 SPRecorder code</text>
+        <text class="comp-sub"   x="240" y="92" text-anchor="middle">managed C# → IL bytecode</text>
+      </g>
+
+      <g class="comp" id="compNative">
+        <rect x="620" y="30" width="300" height="92" rx="10"/>
+        <text class="comp-title" x="770" y="60" text-anchor="middle">🧩 ScreenRecorderLib.dll</text>
+        <text class="comp-sub"   x="770" y="82" text-anchor="middle">native / mixed-mode (C++)</text>
+        <text class="comp-sub"   x="770" y="102" text-anchor="middle">real 1 MB file on disk</text>
+      </g>
+
+      <!-- ===== TIER 2: the build step (the fork) ===== -->
+      <g class="comp" id="compPublish">
+        <rect x="370" y="205" width="260" height="108" rx="10"/>
+        <text class="comp-title" x="500" y="240" text-anchor="middle">📦 dotnet publish</text>
+        <text class="comp-sub"   x="500" y="263" text-anchor="middle">-r win-x64 --self-contained</text>
+        <text class="comp-val"   x="500" y="293" text-anchor="middle" id="pubMode">mode: —</text>
+      </g>
+
+      <!-- ===== TIER 3: the two possible outputs ===== -->
+      <g class="comp" id="compSingle">
+        <rect x="70" y="395" width="350" height="120" rx="10"/>
+        <text class="comp-title" x="245" y="430" text-anchor="middle">🗜️ Single-file output</text>
+        <text class="comp-sub"   x="245" y="455" text-anchor="middle">SPRecorder.exe — 118 MB, ONE file</text>
+        <text class="comp-val"   x="245" y="485" text-anchor="middle">native DLL crammed INSIDE</text>
+      </g>
+
+      <g class="comp" id="compMulti">
+        <rect x="590" y="395" width="350" height="120" rx="10"/>
+        <text class="comp-title" x="765" y="430" text-anchor="middle">📂 Multi-file output</text>
+        <text class="comp-sub"   x="765" y="455" text-anchor="middle">SPRecorder.exe — 162 KB + DLLs</text>
+        <text class="comp-val"   x="765" y="485" text-anchor="middle">ScreenRecorderLib.dll BESIDE exe</text>
+      </g>
+
+      <!-- ===== TIER 4: the runtime loader ===== -->
+      <g class="comp" id="compLoader">
+        <rect x="355" y="560" width="290" height="98" rx="10"/>
+        <text class="comp-title" x="500" y="593" text-anchor="middle">⚙️ .NET loader</text>
+        <text class="comp-sub"   x="500" y="615" text-anchor="middle">Settings → GetDisplays()</text>
+        <text class="comp-val"   x="500" y="641" text-anchor="middle" id="loadResult">result: —</text>
+      </g>
+
+      <!-- ===== arrows ===== -->
+      <path class="arrow" id="arrCodePub"    d="M 240 122 L 432 205" marker-end="url(#arrowhead)"/>
+      <path class="arrow" id="arrNativePub"  d="M 770 122 L 568 205" marker-end="url(#arrowhead)"/>
+      <path class="arrow" id="arrPubSingle"  d="M 452 313 L 272 395" marker-end="url(#arrowhead)"/>
+      <path class="arrow" id="arrPubMulti"   d="M 548 313 L 740 395" marker-end="url(#arrowhead)"/>
+      <path class="arrow" id="arrSingleLoad" d="M 248 515 L 430 560" marker-end="url(#arrowhead)"/>
+      <path class="arrow" id="arrMultiLoad"  d="M 762 515 L 570 560" marker-end="url(#arrowhead)"/>
+
+      <!-- ===== flow labels (hidden until their scene) ===== -->
+      <g class="flow-label-group" id="lblCodePub">
+        <rect class="flow-label-bg" x="285" y="152" width="96"  height="22" rx="5"/>
+        <text class="flow-label"    x="333" y="168" text-anchor="middle">managed IL</text>
+      </g>
+      <g class="flow-label-group" id="lblNativePub">
+        <rect class="flow-label-bg" x="620" y="152" width="100" height="22" rx="5"/>
+        <text class="flow-label"    x="670" y="168" text-anchor="middle">native code</text>
+      </g>
+      <g class="flow-label-group" id="lblPubSingle">
+        <rect class="flow-label-bg" x="288" y="342" width="150" height="22" rx="5"/>
+        <text class="flow-label"    x="363" y="358" text-anchor="middle">bundle all inside</text>
+      </g>
+      <g class="flow-label-group" id="lblPubMulti">
+        <rect class="flow-label-bg" x="578" y="342" width="134" height="22" rx="5"/>
+        <text class="flow-label"    x="645" y="358" text-anchor="middle">copy beside exe</text>
+      </g>
+      <g class="flow-label-group" id="lblSingleLoad">
+        <rect class="flow-label-bg" x="258" y="525" width="158" height="22" rx="5"/>
+        <text class="flow-label"    x="337" y="541" text-anchor="middle">load from bundle ✗</text>
+      </g>
+      <g class="flow-label-group" id="lblMultiLoad">
+        <rect class="flow-label-bg" x="596" y="525" width="146" height="22" rx="5"/>
+        <text class="flow-label"    x="669" y="541" text-anchor="middle">load from disk ✓</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- ============ EXTRA PANELS (declared once, shown by scenes) ============ -->
+  <div class="extra-panel question hidden" id="questionPanel">
+    <div class="ep-title">💡 Key question — predict the error</div>
+    A <em>missing</em> file makes .NET throw <code>FileNotFoundException</code> ("can't find it").
+    But the real crash was <code>BadImageFormatException</code> ("found it — but it isn't a loadable image").
+    The DLL isn't missing; it's right there, bundled inside the 118 MB exe.
+    <strong>So what is special about loading a <em>native</em> DLL from <em>inside</em> another file?</strong>
+  </div>
+
+  <div class="extra-panel race hidden" id="racePanel">
+    <div class="ep-title">⚠️ The rule that bites you</div>
+    A <strong>native / mixed-mode</strong> DLL <strong>cannot</strong> be loaded from a single-file bundle.
+    It must exist as a <strong>real file on disk</strong> so the Windows loader can open it by path.
+    This is a documented .NET single-file limitation — and exactly what SPRecorder's README warns about.
+  </div>
+
+  <div class="extra-panel summary hidden" id="summaryPanel">
+    <div class="ep-title">📐 Takeaways &amp; trade-offs</div>
+    <ul>
+      <li>✅ <strong>Fix:</strong> <code>dotnet publish -c Release -r win-x64 --self-contained true</code> (no single-file), then ship the <strong>whole folder</strong>.</li>
+      <li>⚖️ <strong>Trade-off:</strong> multi-file is ~255 files — they must travel together, and <code>ScreenRecorderLib.dll</code> must stay beside the exe.</li>
+      <li>📦 <strong>For non-coders:</strong> wrap that folder in a portable ZIP with a launcher so they just double-click.</li>
+      <li>🚫 <strong>Never</strong> tick "Produce single file" in Rider while ScreenRecorderLib is a dependency.</li>
+    </ul>
+  </div>
+
+  <div class="controls">
+    <button id="prevBtn" class="tertiary" disabled>← Back</button>
+    <button id="nextBtn">Next →</button>
+    <button id="resetBtn" class="tertiary">↻ Reset</button>
+  </div>
+</div>
+
+<script>
+/* ids used across scenes — drives clearAllStates() */
+const COMPONENTS = ['compCode', 'compNative', 'compPublish', 'compSingle', 'compMulti', 'compLoader'];
+const ARROWS     = ['arrCodePub', 'arrNativePub', 'arrPubSingle', 'arrPubMulti', 'arrSingleLoad', 'arrMultiLoad'];
+const LABELS     = ['lblCodePub', 'lblNativePub', 'lblPubSingle', 'lblPubMulti', 'lblSingleLoad', 'lblMultiLoad'];
+
+/* ---- DOM helpers (scenes call these; they REPLACE state, never append) ---- */
+function setComp(id, state) {
+  const el = document.getElementById(id);
+  if (el) el.setAttribute('class', 'comp' + (state ? ' ' + state : ''));
+}
+function setArrow(id, state) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.setAttribute('class', 'arrow' + (state ? ' ' + state : ''));
+  const markerMap = {
+    '':       'url(#arrowhead)',
+    'dimmed': 'url(#arrowhead)',
+    'active': 'url(#arrowhead-active)',
+    'magic':  'url(#arrowhead-magic)',
+    'done':   'url(#arrowhead-done)',
+    'error':  'url(#arrowhead-error)'
+  };
+  el.setAttribute('marker-end', markerMap[state] || 'url(#arrowhead)');
+}
+function setLabel(id, show, variant) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.setAttribute('class',
+    'flow-label-group' + (variant ? ' ' + variant : '') + (show ? ' show' : '')
+  );
+}
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+function setNarration(cls, title, body) {
+  const n = document.getElementById('narration');
+  n.className = 'narration' + (cls ? ' ' + cls : '');
+  document.getElementById('sceneTitle').textContent = title;
+  document.getElementById('narrationBody').innerHTML = body;
+}
+
+function clearAllStates() {
+  COMPONENTS.forEach(c => setComp(c, ''));
+  ARROWS.forEach(a => setArrow(a, ''));
+  LABELS.forEach(l => setLabel(l, false));
+  setText('pubMode',    'mode: —');
+  setText('loadResult', 'result: —');
+  document.querySelectorAll('.extra-panel').forEach(el => el.classList.add('hidden'));
+}
+
+/* ---- helper: keep the dead single-file branch faded once we switch to the fix ---- */
+function dimSingleBranch() {
+  setComp('compSingle', 'dimmed');
+  setArrow('arrPubSingle', 'dimmed');
+  setArrow('arrSingleLoad', 'dimmed');
+}
+
+/* =============================== SCENES =============================== */
+const scenes = [
+
+  // 0 — Overview
+  () => {
+    setNarration('', 'Overview — meet the cast', `
+      We are shipping <strong>SPRecorder</strong>. Two ingredients go into the build:
+      your <strong>managed C# code</strong>, and a <strong>native</strong> helper
+      <code>ScreenRecorderLib.dll</code> (used for screen capture).
+      <code>dotnet publish</code> turns them into something you can run.
+      <br/>The bug stays hidden until the app actually <em>uses</em> that native DLL.
+      Press <strong>Next →</strong> to follow the value through the system.
+    `);
+  },
+
+  // 1 — managed code loads from anywhere
+  () => {
+    setNarration('', 'Step 1 — Managed code can load from anywhere', `
+      Your C# compiles to <strong>IL</strong> (managed bytecode). The .NET runtime can
+      load IL from almost anywhere — a file, memory, even unpacked from inside another
+      file. That flexibility is exactly what makes a "single-file" exe possible.
+      <br/>Remember: <strong>managed = flexible loading.</strong>
+    `);
+    setComp('compCode', 'active');
+  },
+
+  // 2 — native DLL is different
+  () => {
+    setNarration('warn', 'Step 2 — The native DLL plays by different rules', `
+      <code>ScreenRecorderLib.dll</code> is <strong>native / mixed-mode</strong> code (C++),
+      not pure IL. Native DLLs are loaded by the <strong>Windows OS loader</strong>, which can
+      only open a <strong>real file sitting on disk</strong> — it cannot pull code out of the
+      middle of another file.
+      <br/>Hold onto this: <strong>native = must be a real file on disk.</strong>
+    `);
+    setComp('compCode', 'done');
+    setComp('compNative', 'firing');
+  },
+
+  // 3 — publish: the fork
+  () => {
+    setNarration('', 'Step 3 — dotnet publish: a fork in the road', `
+      <code>dotnet publish</code> takes both ingredients and produces what you ship. It has a
+      knob: <strong>single-file</strong> (one big .exe) or <strong>multi-file</strong>
+      (a folder of files). You chose single-file — let's follow that path first.
+    `);
+    setComp('compCode', 'active');
+    setComp('compNative', 'active');
+    setComp('compPublish', 'firing');
+    setArrow('arrCodePub', 'active');   setLabel('lblCodePub', true);
+    setArrow('arrNativePub', 'active'); setLabel('lblNativePub', true);
+    setText('pubMode', 'mode: ?');
+  },
+
+  // 4 — single-file output
+  () => {
+    setNarration('warn', 'Step 4 — Single-file crams everything inside', `
+      Single-file bundles <strong>every</strong> DLL — including the native
+      <code>ScreenRecorderLib.dll</code> — <strong>inside</strong> one 118 MB
+      <code>SPRecorder.exe</code>. On disk you now see just that one file; the native DLL is
+      no longer a separate file next to it.
+      <br/>That's the giveaway: your broken folder had a 118 MB exe and <em>no</em> standalone
+      <code>ScreenRecorderLib.dll</code>.
+    `);
+    setComp('compCode', 'done');
+    setComp('compNative', 'done');
+    setComp('compPublish', 'done');
+    setArrow('arrCodePub', 'done');
+    setArrow('arrNativePub', 'done');
+    setText('pubMode', 'mode: single-file');
+    setArrow('arrPubSingle', 'active'); setLabel('lblPubSingle', true);
+    setComp('compSingle', 'active');
+  },
+
+  // 5 — app starts, looks fine
+  () => {
+    setNarration('', 'Step 5 — The app starts — and looks fine', `
+      You double-click it: the tray icon appears, audio recording works — all good. Why no
+      crash yet? Because the native DLL hasn't been <strong>needed</strong>. .NET loads native
+      code <strong>lazily</strong> — only when the first call into it actually happens.
+    `);
+    setComp('compCode', 'done');
+    setComp('compNative', 'done');
+    setComp('compPublish', 'done');
+    setArrow('arrCodePub', 'done');
+    setArrow('arrNativePub', 'done');
+    setText('pubMode', 'mode: single-file');
+    setComp('compSingle', 'done');
+    setArrow('arrPubSingle', 'done');
+    setArrow('arrSingleLoad', 'active');
+    setComp('compLoader', 'active');
+    setText('loadResult', 'app running ✓');
+  },
+
+  // 6 — trigger: open Settings
+  () => {
+    setNarration('warn', 'Step 6 — You open Settings (the trigger)', `
+      You click <strong>Settings</strong>. It calls <code>ScreenRecorder.GetDisplays()</code>
+      to list your monitors. This is the <strong>first</strong> moment the native
+      <code>ScreenRecorderLib.dll</code> is actually needed, so .NET goes to load it —
+      from inside the single-file bundle.
+    `);
+    setComp('compPublish', 'done');
+    setText('pubMode', 'mode: single-file');
+    setComp('compSingle', 'done');
+    setArrow('arrPubSingle', 'done');
+    setArrow('arrSingleLoad', 'active');
+    setComp('compLoader', 'firing');
+    setText('loadResult', 'loading ScreenRecorderLib…');
+  },
+
+  // 7 — KEY QUESTION
+  () => {
+    setNarration('magic', 'Step 7 — Stop. Predict the error.', `
+      Before the reveal, answer the question in the purple box. The distinction between
+      "<em>not found</em>" and "<em>found but not loadable</em>" is the whole bug.
+    `);
+    setComp('compSingle', 'done');
+    setArrow('arrSingleLoad', 'active');
+    setComp('compLoader', 'firing');
+    setText('loadResult', 'loading ScreenRecorderLib…');
+    show('questionPanel');
+  },
+
+  // 8 — the crash + the rule
+  () => {
+    setNarration('error', 'Step 8 — 💥 BadImageFormatException', `
+      Here's the answer. Single-file can <strong>unpack and load managed IL</strong> from the
+      bundle — fine. But a <strong>native / mixed-mode</strong> DLL must be a real file the OS
+      loader opens by path; it can't be loaded from inside the bundle. .NET finds the embedded
+      bytes, tries to treat them as a loadable image, and fails →
+      <code>BadImageFormatException</code>. The stack points at <code>GetDisplays()</code>
+      simply because that's the first code to touch the native DLL.
+    `);
+    setComp('compSingle', 'error');
+    setArrow('arrSingleLoad', 'error'); setLabel('lblSingleLoad', true, 'error');
+    setComp('compLoader', 'error');
+    setText('loadResult', '💥 BadImageFormatException');
+    show('racePanel');
+  },
+
+  // 9 — the fix: multi-file
+  () => {
+    setNarration('', 'Step 9 — The fix: publish multi-file', `
+      Publish <strong>without</strong> single-file (the README command). Now the output is a
+      <strong>folder</strong>: a tiny 162 KB <code>SPRecorder.exe</code> with
+      <code>ScreenRecorderLib.dll</code> sitting <strong>next to it as a real file on disk</strong>
+      — exactly what the OS loader needs.
+    `);
+    setComp('compCode', 'done');
+    setComp('compNative', 'done');
+    setComp('compPublish', 'done');
+    setArrow('arrCodePub', 'done');
+    setArrow('arrNativePub', 'done');
+    setText('pubMode', 'mode: multi-file');
+    setArrow('arrPubMulti', 'active'); setLabel('lblPubMulti', true);
+    setComp('compMulti', 'active');
+    dimSingleBranch();
+  },
+
+  // 10 — runtime success
+  () => {
+    setNarration('success', 'Step 10 — GetDisplays() now works', `
+      Open Settings now and the OS loader finds <code>ScreenRecorderLib.dll</code> as a real
+      file beside the exe, loads it, and the monitor list fills in. No crash. The
+      <strong>code never changed</strong> — only the <strong>shape of the output</strong> did.
+    `);
+    setComp('compNative', 'done');
+    setComp('compPublish', 'done');
+    setText('pubMode', 'mode: multi-file');
+    setArrow('arrPubMulti', 'done');
+    setComp('compMulti', 'done');
+    setArrow('arrMultiLoad', 'done'); setLabel('lblMultiLoad', true);
+    setComp('compLoader', 'done');
+    setText('loadResult', '✓ displays loaded');
+    dimSingleBranch();
+  },
+
+  // 11 — summary
+  () => {
+    setNarration('success', 'Step 11 — Takeaways & trade-offs', `
+      One idea to keep: <strong>single-file is fine for pure-managed apps, but it breaks any
+      native / mixed-mode dependency.</strong> While SPRecorder uses ScreenRecorderLib, always
+      ship multi-file. The trade-offs are in the green box.
+    `);
+    setComp('compNative', 'done');
+    setComp('compPublish', 'done');
+    setText('pubMode', 'mode: multi-file');
+    setArrow('arrPubMulti', 'done');
+    setComp('compMulti', 'done');
+    setArrow('arrMultiLoad', 'done'); setLabel('lblMultiLoad', true);
+    setComp('compLoader', 'done');
+    setText('loadResult', '✓ displays loaded');
+    dimSingleBranch();
+    show('summaryPanel');
+  }
+];
+
+const TOTAL = scenes.length - 1;
+
+/* ---- render loop & navigation ---- */
+let currentStep = 0;
+function buildProgressDots() {
+  const progress = document.getElementById('stepProgress');
+  progress.innerHTML = '';
+  for (let i = 0; i <= TOTAL; i++) {
+    const d = document.createElement('div');
+    d.className = 'step-dot';
+    d.textContent = i;
+    d.id = 'dot' + i;
+    progress.appendChild(d);
+  }
+}
+function render(step) {
+  clearAllStates();
+  if (scenes[step]) scenes[step]();
+  for (let i = 0; i <= TOTAL; i++) {
+    const d = document.getElementById('dot' + i);
+    if (!d) continue;
+    d.classList.remove('done', 'current');
+    if (i < step)  d.classList.add('done');
+    if (i === step) d.classList.add('current');
+  }
+  document.getElementById('stepBadge').textContent = `Step ${step} / ${TOTAL}`;
+  document.getElementById('prevBtn').disabled = step === 0;
+  document.getElementById('nextBtn').disabled = step === TOTAL;
+}
+document.getElementById('prevBtn').onclick  = () => { if (currentStep > 0)     { currentStep--; render(currentStep); } };
+document.getElementById('nextBtn').onclick  = () => { if (currentStep < TOTAL) { currentStep++; render(currentStep); } };
+document.getElementById('resetBtn').onclick = () => { currentStep = 0; render(0); };
+
+buildProgressDots();
+render(0);
+</script>
+</body>
+</html>

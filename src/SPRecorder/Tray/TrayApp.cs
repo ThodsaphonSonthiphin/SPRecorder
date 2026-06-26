@@ -37,6 +37,9 @@ internal sealed class TrayApp : ApplicationContext
     private MarkerStamp? _pendingStamp;
     private int _markerCount;
 
+    private readonly HdrDisplay _hdr = new();
+    private string? _hdrTurnedOffFor;   // monitor we turned HDR off on, to restore on stop (null = untouched)
+
     public TrayApp(AppConfigStore store)
     {
         _store = store;
@@ -182,7 +185,61 @@ internal sealed class TrayApp : ApplicationContext
         if (_session.CurrentState == RecordingSession.State.Recording)
             StopRecording();
         else
-            _session.Start();
+            StartManual();
+    }
+
+    private void StartManual()
+    {
+        if (!ConfirmHdrBeforeStart()) return;   // user cancelled the start
+        _session.Start();
+    }
+
+    /// <summary>
+    /// If screen recording is on and the recorded monitor is in HDR, warn the user —
+    /// ScreenRecorderLib can't capture HDR, so colours come out washed-out/oversaturated —
+    /// and optionally turn HDR off for the recording (restored on stop). Returns false
+    /// only when the user chooses to cancel the start. Best-effort: never blocks on error.
+    /// </summary>
+    private bool ConfirmHdrBeforeStart()
+    {
+        if (!_store.Current.ScreenRecordingEnabled) return true;
+
+        var device = _store.Current.ScreenMonitorDeviceName;
+        if (_hdr.GetState(device) != HdrState.On) return true;
+
+        var label = string.IsNullOrEmpty(device) ? "primary monitor" : device;
+        switch (HdrWarningPrompt.Ask(label))
+        {
+            case HdrPromptResult.DisableHdr:
+                if (_hdr.TryTurnOff(device))
+                    _hdrTurnedOffFor = device;
+                else
+                    ShowBalloon(ToolTipIcon.Warning, "Couldn't turn off HDR",
+                        "Recording will continue, but colours may be wrong. Try Win+Alt+B.");
+                return true;
+            case HdrPromptResult.RecordAnyway:
+                return true;
+            default:
+                return false;   // Cancel
+        }
+    }
+
+    private void RestoreHdrIfNeeded()
+    {
+        if (_hdrTurnedOffFor is { } device)
+        {
+            _hdr.TurnOn(device);
+            _hdrTurnedOffFor = null;
+        }
+    }
+
+    /// <summary>Non-blocking HDR warning for the auto-start path (no modal dialog).</summary>
+    private void WarnIfRecordedMonitorHdr()
+    {
+        if (!_store.Current.ScreenRecordingEnabled) return;
+        if (_hdr.GetState(_store.Current.ScreenMonitorDeviceName) != HdrState.On) return;
+        ShowBalloon(ToolTipIcon.Warning, "HDR is on",
+            "Recording colours will be wrong. Press Win+Alt+B to turn HDR off, then restart the recording.");
     }
 
     private void StopRecording()
@@ -294,6 +351,7 @@ internal sealed class TrayApp : ApplicationContext
 
         _autoStarted = true;
         ShowBalloon(ToolTipIcon.Info, "Call detected", "Auto-recording started.");
+        WarnIfRecordedMonitorHdr();
         _session.Start();
     }
 
@@ -347,6 +405,8 @@ internal sealed class TrayApp : ApplicationContext
         }
         else
         {
+            RestoreHdrIfNeeded();   // turn HDR back on if we disabled it for this recording
+
             ApplyTrayIcon();
             _toggleItem.Text = "Start recording";
             _tooltipTimer.Stop();
