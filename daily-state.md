@@ -1,7 +1,7 @@
 ---
 type: daily-state
 schema_version: 1
-updated: '2026-06-25T19:09:00+07:00'
+updated: '2026-06-27T08:20:51+07:00'
 ---
 
 # Daily state
@@ -64,6 +64,25 @@ EOF
 - 2026-06-25T19:05:05+07:00 — refactor: compute InactiveLabels once in RegisterHotkeys balloon
 - 2026-06-25T19:09:00+07:00 — $(cat <<'EOF'
 polish: drop hotkey from conflict menu label so multi-key lists read grammatically
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+EOF
+)
+- 2026-06-27T08:05:54+07:00 — docs: marker review page design (spec, ADRs 0019-0022, mockup, plan) — Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+- 2026-06-27T08:08:08+07:00 — $(cat <<'EOF'
+feat: add AutoOpenMarkerReview config flag (default off)
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+EOF
+)
+- 2026-06-27T08:10:43+07:00 — $(cat <<'EOF'
+feat: add FileNameBuilder.BuildReviewPage for _review.html
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+EOF
+)
+- 2026-06-27T08:20:51+07:00 — $(cat <<'EOF'
+test: harden MarkerReviewPage XSS coverage; document media-kind + encoder contracts
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF

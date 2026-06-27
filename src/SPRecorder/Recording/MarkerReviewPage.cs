@@ -24,11 +24,17 @@ public static class MarkerReviewPage
                              IReadOnlyList<MarkerEntry> markers, IReadOnlyList<ReviewMedia> media)
         => File.WriteAllText(path, Render(title, startedAt, markers, media), Encoding.UTF8);
 
+    /// <remarks>
+    /// Expects at most one <see cref="ReviewMedia"/> entry per Kind ("video"/"audio"); duplicate kinds would collide on the shared DOM id.
+    /// </remarks>
     public static string Render(string title, DateTime startedAt,
                                 IReadOnlyList<MarkerEntry> markers, IReadOnlyList<ReviewMedia> media)
     {
         var subtitle = $"{startedAt:yyyy-MM-dd HH:mm:ss} · {markers.Count} {(markers.Count == 1 ? "marker" : "markers")}";
 
+        // System.Text.Json's default encoder escapes < > & (e.g. "</script>" -> "</script>"),
+        // which is what makes embedding this array inside a <script> block safe. Do NOT switch to
+        // JavaScriptEncoder.UnsafeRelaxedJsonEscaping here — it would reopen a script-injection hole.
         var markersJson = JsonSerializer.Serialize(markers.Select(m => new
         {
             seq = m.Seq,

@@ -66,4 +66,12 @@ public class MarkerReviewPageTests
             new[] { E(1, 0, 1, "</script><XSS>") }, new[] { Audio });
         Assert.DoesNotContain("<XSS>", html);   // JSON-encoded, never raw markup
     }
+
+    [Fact]
+    public void Render_NoteWithClosingScriptTag_IsNeutralized()
+    {
+        var html = MarkerReviewPage.Render("t", Start,
+            new[] { E(1, 0, 1, "ZZ</script>ZZ") }, new[] { Audio });
+        Assert.DoesNotContain("ZZ</script>ZZ", html);   // the note's < is JSON-escaped, no breakout
+    }
 }
