@@ -72,4 +72,18 @@ public class FileNameBuilderTests
         var name = FileNameBuilder.BuildMarker("{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3", T, "weird");
         Assert.Equal("2026-04-27_14-30-22_markers.md", name);
     }
+
+    [Fact]
+    public void BuildReviewPage_ForcesHtmlExtension()
+    {
+        var name = FileNameBuilder.BuildReviewPage("{timestamp:yyyy-MM-dd_HH-mm-ss}_{track}.mp3", T);
+        Assert.Equal("2026-04-27_14-30-22_review.html", name);
+    }
+
+    [Fact]
+    public void BuildReviewPage_AddsHtml_WhenPatternHasNoExtension()
+    {
+        var name = FileNameBuilder.BuildReviewPage("{timestamp:yyyy-MM-dd}_{track}", T);
+        Assert.Equal("2026-04-27_review.html", name);
+    }
 }

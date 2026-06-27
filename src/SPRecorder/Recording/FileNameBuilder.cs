@@ -32,6 +32,12 @@ public static partial class FileNameBuilder
         return Path.ChangeExtension(baseName, ext);
     }
 
+    public static string BuildReviewPage(string pattern, DateTime timestamp)
+    {
+        var baseName = Build(pattern, timestamp, "review");
+        return Path.ChangeExtension(baseName, ".html");
+    }
+
     private static string Sanitize(string fileName)
     {
         var invalid = Path.GetInvalidFileNameChars();
