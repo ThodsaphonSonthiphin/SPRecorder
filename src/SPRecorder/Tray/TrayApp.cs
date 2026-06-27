@@ -409,6 +409,8 @@ internal sealed class TrayApp : ApplicationContext
             _toggleItem.Text = "Stop recording";
             _tooltipTimer.Start();
             _markerCount = 0;
+            _openReviewItem.Visible = false;
+            _lastReviewPagePath = null;
             _quickMarkItem.Enabled = true;
             _noteMarkItem.Enabled = true;
             UpdateTooltip();
@@ -452,6 +454,10 @@ internal sealed class TrayApp : ApplicationContext
             ShowBalloon(ToolTipIcon.Warning, "Mixing failed", "Separate tracks were saved successfully.");
             return;
         }
+        // When the session has markers, a "Marker review ready" balloon follows immediately
+        // and should be the single (clickable) terminal notification — Windows shows only one
+        // tray balloon at a time, so skip the mixed-file balloon to avoid dropping the review one.
+        if (_markerCount > 0) return;
         ShowBalloon(ToolTipIcon.Info, "Mixed file ready",
             $"{FormatSize(SafeSize(mixedPath))} · {Path.GetFileName(mixedPath)}");
     }
