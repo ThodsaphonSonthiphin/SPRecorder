@@ -102,6 +102,14 @@ session. Kept separate from the tracks so it survives mixing and splitting, and 
 it can be handed to an AI summarizer as its own source.
 _Avoid_: marker file, notes file, index
 
+**Marker review page**:
+The self-contained HTML file SPRecorder generates next to a Recording Session's
+tracks when the session has at least one Marker. It embeds the Screen recording
+and/or the Mixed file and lists every Marker as a clickable entry; clicking one
+seeks the embedded player to that Marker's elapsed offset. Opened in a browser —
+the browser is the player; no media-playback code lives in the app.
+_Avoid_: viewer, web player, player page
+
 ## Drive delivery
 
 **Upload**:

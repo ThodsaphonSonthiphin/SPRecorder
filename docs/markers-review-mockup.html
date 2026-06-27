@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPRecorder — Marker review page (mockup)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #f0f0f0;
+    color: #1f1f1f;
+    padding: 28px 20px 48px;
+    line-height: 1.45;
+  }
+  .page { max-width: 1040px; margin: 0 auto; }
+
+  .mock-note {
+    font-size: 12px; color: #888; text-align: center; margin-bottom: 20px;
+  }
+  .mock-note b { color: #0078d4; }
+
+  /* ---------- Header ---------- */
+  .header { margin-bottom: 18px; }
+  .header h1 { font-size: 22px; font-weight: 600; }
+  .header .sub { color: #666; font-size: 13px; margin-top: 3px; }
+
+  /* ---------- Layout: player left, markers right ---------- */
+  .layout { display: flex; gap: 20px; align-items: flex-start; }
+  .player-col { flex: 1 1 58%; min-width: 0; position: sticky; top: 20px; }
+  .markers-col { flex: 1 1 42%; min-width: 0; }
+  @media (max-width: 760px) {
+    .layout { flex-direction: column; }
+    .player-col { position: static; width: 100%; }
+  }
+
+  .card {
+    background: #fff; border: 1px solid #d8d8d8; border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06); overflow: hidden;
+  }
+
+  /* ---------- Track switcher (segmented) ---------- */
+  .switch { display: flex; gap: 6px; margin-bottom: 12px; }
+  .switch button {
+    background: #fff; border: 1px solid #c8c8c8; color: #444;
+    font: inherit; font-size: 13px; padding: 7px 16px; border-radius: 6px;
+    cursor: pointer; display: flex; align-items: center; gap: 7px;
+  }
+  .switch button.active { background: #0078d4; border-color: #0078d4; color: #fff; }
+  .switch button:not(.active):hover { background: #f3f3f3; }
+
+  /* ---------- Player ---------- */
+  .stage {
+    aspect-ratio: 16 / 9; background: #14171c; position: relative;
+    display: flex; align-items: center; justify-content: center; color: #5a6472;
+  }
+  .stage.audio { aspect-ratio: auto; height: 132px; background: #1b2733;
+    background-image: repeating-linear-gradient(90deg,#243343 0 2px,transparent 2px 7px); }
+  .stage .play-glyph {
+    width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,.12);
+    display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;
+  }
+  .stage .badge {
+    position: absolute; top: 10px; left: 12px; font-size: 11px; color: #93a1b3;
+    background: rgba(0,0,0,.35); padding: 3px 9px; border-radius: 10px;
+  }
+  .stage .audiolabel { color:#9fb4cc; font-size:13px; display:flex; gap:9px; align-items:center; }
+
+  .controls { padding: 12px 14px 14px; }
+  .timerow { display: flex; justify-content: space-between; font-size: 12px;
+    color: #555; font-family: 'Cascadia Code', Consolas, monospace; margin-bottom: 7px; }
+  .timerow .nowat { color: #0078d4; font-weight: 600; }
+
+  .scrub { position: relative; height: 18px; cursor: pointer; }
+  .scrub .track-line { position: absolute; top: 7px; left: 0; right: 0; height: 4px;
+    background: #d9d9d9; border-radius: 2px; }
+  .scrub .fill { position: absolute; top: 7px; left: 0; height: 4px; width: 0;
+    background: #0078d4; border-radius: 2px; transition: width .25s ease; }
+  .scrub .head { position: absolute; top: 2px; width: 14px; height: 14px; margin-left: -7px;
+    background: #0078d4; border: 2px solid #fff; border-radius: 50%; left: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .25s ease; }
+  .scrub .tick { position: absolute; top: 3px; width: 3px; height: 12px;
+    background: #f0a30a; border-radius: 1px; margin-left: -1.5px; cursor: pointer; }
+  .scrub .tick:hover { height: 16px; top: 1px; }
+
+  .play-btn { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .play-btn button#playBtn {
+    width: 38px; height: 38px; border-radius: 50%; border: none; background: #0078d4;
+    color: #fff; font-size: 15px; cursor: pointer;
+  }
+  .play-btn .hint { font-size: 12px; color: #888; }
+  .play-btn .fs-btn {
+    margin-left: auto; border: 1px solid #c8c8c8; background: #fff; color: #333;
+    border-radius: 6px; font: inherit; font-size: 13px; padding: 7px 13px; cursor: pointer;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .play-btn .fs-btn:hover { background: #f0f0f0; }
+
+  /* Fullscreen: enlarge the whole review (player stays clickable, markers visible) */
+  #reviewWrap:fullscreen { background: #14171c; padding: 26px; gap: 26px; }
+  #reviewWrap:fullscreen .player-col { flex: 1 1 72%; }
+  #reviewWrap:fullscreen .markers-col { flex: 1 1 28%; max-height: 100vh; overflow: auto; }
+  #reviewWrap:fullscreen .markers-col h2,
+  #reviewWrap:fullscreen .jump-hint { color: #aebccd; }
+
+  /* ---------- Marker list ---------- */
+  .markers-col h2 { font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .8px; color: #888; margin: 4px 2px 10px; }
+  .mlist { display: flex; flex-direction: column; }
+  .marker {
+    display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px;
+    border: 1px solid #e2e2e2; border-bottom: none; cursor: pointer; background: #fff;
+  }
+  .marker:first-child { border-radius: 8px 8px 0 0; }
+  .marker:last-child { border-bottom: 1px solid #e2e2e2; border-radius: 0 0 8px 8px; }
+  .marker:hover { background: #f5f9fe; }
+  .marker.active { background: #e8f2fc; border-left: 3px solid #0078d4; padding-left: 11px; }
+  .marker .seq {
+    flex: none; width: 30px; height: 30px; border-radius: 50%; background: #eef1f4;
+    color: #555; font-size: 13px; font-weight: 600; display: flex; align-items: center;
+    justify-content: center;
+  }
+  .marker.active .seq { background: #0078d4; color: #fff; }
+  .marker .meta { min-width: 0; }
+  .marker .ts {
+    font-family: 'Cascadia Code', Consolas, monospace; font-size: 14px; color: #1f1f1f;
+  }
+  .marker .wall { color: #9a9a9a; font-size: 12px; margin-left: 6px;
+    font-family: 'Cascadia Code', Consolas, monospace; }
+  .marker .note { font-size: 13px; color: #444; margin-top: 3px; }
+  .marker .note.empty { color: #b3b3b3; font-style: italic; }
+  .jump-hint { font-size: 12px; color: #888; margin: 12px 2px 0; }
+
+  .pagefoot { text-align: center; font-size: 11px; color: #aaa; margin-top: 26px; }
+
+  /* ---------- Tray surfaces inset (ADR 0022) ---------- */
+  .inset { margin-top: 34px; border-top: 1px dashed #ccc; padding-top: 22px; }
+  .inset .lbl { font-size: 12px; color: #888; text-align: center; margin-bottom: 14px; }
+  .inset-row { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; }
+  .toast {
+    width: 300px; background: #fff; border: 1px solid #d0d0d0; border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.16); overflow: hidden;
+  }
+  .toast .tt { display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; font-size: 12px; color: #555; background: #f6f6f6;
+    border-bottom: 1px solid #eee; }
+  .toast .tb { padding: 12px; display: flex; gap: 11px; align-items: center; }
+  .toast .ico { width: 30px; height: 30px; border-radius: 6px; background: #0078d4;
+    color: #fff; display: flex; align-items: center; justify-content: center; }
+  .toast .msg { font-size: 13px; }
+  .toast .msg b { display: block; font-weight: 600; }
+  .toast .msg span { color: #777; font-size: 12px; }
+  .menu {
+    width: 230px; background: #fff; border: 1px solid #d0d0d0; border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.16); padding: 5px; font-size: 13px;
+  }
+  .menu .mi { padding: 7px 12px; border-radius: 4px; color: #333; }
+  .menu .mi:hover { background: #f0f0f0; }
+  .menu .mi.hl { background: #e8f2fc; color: #0078d4; }
+  .menu .sep { height: 1px; background: #eee; margin: 5px 6px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <p class="mock-note">MOCKUP — simulated playback (no real media file). Click any marker
+  to see the playhead jump. This is the page <b>SPRecorder generates</b> next to the tracks.</p>
+
+  <div class="header">
+    <h1>Markers — Q2 Planning</h1>
+    <div class="sub">2026-06-25 14:20:05 · 3 markers · plays from the files in this folder</div>
+  </div>
+
+  <div class="layout" id="reviewWrap">
+    <!-- ============ PLAYER ============ -->
+    <div class="player-col">
+      <div class="switch">
+        <button class="active" data-mode="video">▶  Video (screen)</button>
+        <button data-mode="audio">🔊  Mixed audio</button>
+      </div>
+
+      <div class="card">
+        <div class="stage" id="stage">
+          <span class="badge" id="stageBadge">2026-06-25_14-20-05_screen.mp4</span>
+          <div class="play-glyph" id="videoGlyph">▶</div>
+          <div class="audiolabel" id="audioGlyph" style="display:none;">
+            🔊 &nbsp;_mixed.mp3 — audio only
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="timerow">
+            <span class="nowat" id="nowAt">00:00:00</span>
+            <span id="dur">00:48:30</span>
+          </div>
+          <div class="scrub" id="scrub">
+            <div class="track-line"></div>
+            <div class="fill" id="fill"></div>
+            <!-- marker ticks injected by JS -->
+            <div class="head" id="head"></div>
+          </div>
+          <div class="play-btn">
+            <button id="playBtn">▶</button>
+            <span class="hint" id="playHint">Jumped to #1 — 00:12:34</span>
+            <button class="fs-btn" id="fsBtn" title="Expand video to fullscreen">⛶ Fullscreen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ MARKER LIST ============ -->
+    <div class="markers-col">
+      <h2>Markers — click to jump</h2>
+      <div class="mlist" id="mlist"></div>
+      <p class="jump-hint">Clicking a marker sets the player to that moment
+        (<code>media.currentTime</code>). The orange ticks on the scrub bar are the same markers.</p>
+    </div>
+  </div>
+
+  <!-- ============ Tray surfaces (ADR 0022) ============ -->
+  <div class="inset">
+    <div class="lbl">What you see in Windows after a marked recording (not part of the page)</div>
+    <div class="inset-row">
+      <div class="toast">
+        <div class="tt"><span>SPRecorder</span><span>✕</span></div>
+        <div class="tb">
+          <div class="ico">▶</div>
+          <div class="msg"><b>Marker review ready</b><span>Q2 Planning · 3 markers — click to open</span></div>
+        </div>
+      </div>
+      <div class="menu">
+        <div class="mi">Stop recording</div>
+        <div class="sep"></div>
+        <div class="mi hl">Open marker review</div>
+        <div class="mi">Open folder</div>
+        <div class="mi">Settings…</div>
+        <div class="mi">Quit</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="pagefoot">SPRecorder marker review · generated automatically when a session has markers</p>
+</div>
+
+<script>
+  const DURATION = 2910; // 48:30 in seconds
+  const markers = [
+    { seq: 1, elapsed: 754,  wall: '14:32:39', note: 'ตัดสินใจเลื่อน launch ไป Q3' },
+    { seq: 2, elapsed: 1510, wall: '14:45:15', note: '' },
+    { seq: 3, elapsed: 2512, wall: '15:02:00', note: 'งบ marketing ตัด 20%' },
+  ];
+
+  const fmt = (s) => {
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = Math.floor(s%60);
+    const p = (n)=>String(n).padStart(2,'0');
+    return `${p(h)}:${p(m)}:${p(sec)}`;
+  };
+
+  const mlist = document.getElementById('mlist');
+  const scrub = document.getElementById('scrub');
+  const fill = document.getElementById('fill');
+  const head = document.getElementById('head');
+  const nowAt = document.getElementById('nowAt');
+  const playHint = document.getElementById('playHint');
+
+  function seekTo(mk) {
+    const pct = (mk.elapsed / DURATION) * 100;
+    fill.style.width = pct + '%';
+    head.style.left = pct + '%';
+    nowAt.textContent = fmt(mk.elapsed);
+    playHint.textContent = `Jumped to #${mk.seq} — ${fmt(mk.elapsed)}`;
+    document.querySelectorAll('.marker').forEach(el => el.classList.remove('active'));
+    document.querySelector(`.marker[data-seq="${mk.seq}"]`).classList.add('active');
+  }
+
+  markers.forEach((mk, i) => {
+    // list row
+    const row = document.createElement('div');
+    row.className = 'marker' + (i === 0 ? ' active' : '');
+    row.dataset.seq = mk.seq;
+    row.innerHTML = `
+      <div class="seq">${mk.seq}</div>
+      <div class="meta">
+        <div><span class="ts">${fmt(mk.elapsed)}</span><span class="wall">(${mk.wall})</span></div>
+        <div class="note ${mk.note ? '' : 'empty'}">${mk.note || 'no note'}</div>
+      </div>`;
+    row.addEventListener('click', () => seekTo(mk));
+    mlist.appendChild(row);
+
+    // scrub tick
+    const tick = document.createElement('div');
+    tick.className = 'tick';
+    tick.style.left = (mk.elapsed / DURATION) * 100 + '%';
+    tick.title = `#${mk.seq} · ${fmt(mk.elapsed)}`;
+    tick.addEventListener('click', (e) => { e.stopPropagation(); seekTo(mk); });
+    scrub.insertBefore(tick, head);
+  });
+
+  // initialise at #1
+  seekTo(markers[0]);
+
+  // fullscreen / expand — enlarges the whole review (player + markers stay usable)
+  const fsBtn = document.getElementById('fsBtn');
+  const wrap = document.getElementById('reviewWrap');
+  fsBtn.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (wrap.requestFullscreen) wrap.requestFullscreen();
+  });
+  document.addEventListener('fullscreenchange', () => {
+    fsBtn.textContent = document.fullscreenElement ? '⛶ Exit fullscreen' : '⛶ Fullscreen';
+  });
+
+  // track switcher
+  document.querySelectorAll('.switch button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.switch button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const audio = btn.dataset.mode === 'audio';
+      document.getElementById('stage').classList.toggle('audio', audio);
+      document.getElementById('videoGlyph').style.display = audio ? 'none' : 'flex';
+      document.getElementById('audioGlyph').style.display = audio ? 'flex' : 'none';
+      document.getElementById('stageBadge').textContent =
+        audio ? '2026-06-25_14-20-05_mixed.mp3' : '2026-06-25_14-20-05_screen.mp4';
+    });
+  });
+</script>
+</body>
+</html>
