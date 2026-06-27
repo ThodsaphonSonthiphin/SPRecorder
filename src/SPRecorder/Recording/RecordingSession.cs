@@ -189,11 +189,16 @@ public sealed class RecordingSession : IDisposable
         var willSplit = !_activeConfig.SplitMode.Equals("None", StringComparison.OrdinalIgnoreCase);
 
         if (willMix || willSplit)
+        {
             StartPostProcessingInBackground(willMix, willSplit);
+        }
         else
-            WriteReviewPage(ReviewPagePath, _sessionLabel, _startedAt,
-                _markerLog?.Entries ?? (IReadOnlyList<MarkerEntry>)Array.Empty<MarkerEntry>(),
-                ScreenFilePath, null);   // no mix/split → only the screen video can be a track
+        {
+            var entries = _markerLog is { } ml
+                ? new List<MarkerEntry>(ml.Entries)
+                : new List<MarkerEntry>();
+            WriteReviewPage(ReviewPagePath, _sessionLabel, _startedAt, entries, ScreenFilePath, null);
+        }
     }
 
     private void TryRenameToSessionFolder()
