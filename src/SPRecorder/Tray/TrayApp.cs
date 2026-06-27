@@ -36,6 +36,9 @@ internal sealed class TrayApp : ApplicationContext
     private MarkNoteInputForm? _noteForm;
     private MarkerStamp? _pendingStamp;
     private int _markerCount;
+    private ToolStripMenuItem _openReviewItem = null!;
+    private string? _lastReviewPagePath;
+    private Action? _onBalloonClick;
 
     private readonly HdrDisplay _hdr = new();
     private string? _hdrTurnedOffFor;   // monitor we turned HDR off on, to restore on stop (null = untouched)
@@ -57,6 +60,7 @@ internal sealed class TrayApp : ApplicationContext
         _session.MixingStarted   += () => OnUi(() => ShowBalloon(ToolTipIcon.Info, "Mixing tracks…", "Combining system + mic into one MP3 for AI summary."));
         _session.MixingCompleted += path => OnUi(() => OnMixingCompleted(path));
         _session.MarkerAdded += (seq, elapsed) => OnUi(() => OnMarkerAdded(seq, elapsed));
+        _session.ReviewPageReady += path => OnUi(() => OnReviewPageReady(path));
 
         _callDetector = new CallDetector();
         _callDetector.CallStarted += () => OnUi(OnCallStarted);
@@ -79,6 +83,11 @@ internal sealed class TrayApp : ApplicationContext
             Visible = false,
         };
 
+        _openReviewItem = new ToolStripMenuItem("Open marker review", null, (_, _) => OpenReviewPage())
+        {
+            Visible = false,
+        };
+
         var menu = new ContextMenuStrip();
         menu.Items.Add(_toggleItem);
         menu.Items.Add(_statusItem);
@@ -88,6 +97,7 @@ internal sealed class TrayApp : ApplicationContext
         menu.Items.Add(_noteMarkItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Open recordings folder", null, (_, _) => OpenFolder());
+        menu.Items.Add(_openReviewItem);
         menu.Items.Add("Settings…", null, (_, _) => OpenSettings());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("About", null, (_, _) => ShowAbout());
@@ -101,6 +111,7 @@ internal sealed class TrayApp : ApplicationContext
             ContextMenuStrip = menu,
         };
         _notifyIcon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ToggleRecording(); };
+        _notifyIcon.BalloonTipClicked += (_, _) => { var a = _onBalloonClick; _onBalloonClick = null; a?.Invoke(); };
 
         RegisterHotkeys();
 
@@ -445,6 +456,30 @@ internal sealed class TrayApp : ApplicationContext
             $"{FormatSize(SafeSize(mixedPath))} · {Path.GetFileName(mixedPath)}");
     }
 
+    private void OnReviewPageReady(string path)
+    {
+        _lastReviewPagePath = path;
+        _openReviewItem.Visible = true;
+        ShowBalloon(ToolTipIcon.Info, "Marker review ready",
+            _markerCount > 0 ? $"{_markerCount} marker(s) — click to open" : "Click to open");
+        _onBalloonClick = OpenReviewPage;   // set AFTER ShowBalloon (which clears it)
+        if (_store.Current.AutoOpenMarkerReview) OpenReviewPage();
+    }
+
+    private void OpenReviewPage()
+    {
+        var p = _lastReviewPagePath;
+        if (p is null || !File.Exists(p)) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = p, UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ShowBalloon(ToolTipIcon.Warning, "Couldn't open review page", ex.Message);
+        }
+    }
+
     private void OnUi(Action action) => _uiContext.Post(_ => action(), null);
 
     private void UpdateTooltip()
@@ -472,6 +507,7 @@ internal sealed class TrayApp : ApplicationContext
 
     private void ShowBalloon(ToolTipIcon icon, string title, string text)
     {
+        _onBalloonClick = null;
         _notifyIcon.BalloonTipIcon = icon;
         _notifyIcon.BalloonTipTitle = title;
         _notifyIcon.BalloonTipText = string.IsNullOrEmpty(text) ? " " : text;
