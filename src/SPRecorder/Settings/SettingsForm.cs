@@ -63,6 +63,7 @@ internal sealed class SettingsForm : Form
     private HotkeyCaptureControl _markWithNoteHotkey = null!;
     private RadioButton _markerMarkdown = null!;
     private RadioButton _markerCsv = null!;
+    private CheckBox _autoOpenReview = null!;
 
     public SettingsForm(AppConfig initial, bool isRecording, HotkeyStatus? hotkeyStatus = null)
     {
@@ -580,6 +581,19 @@ internal sealed class SettingsForm : Form
             Size = new Size(InputWidth - 12, 24),
         };
         page.Controls.Add(_markerCsv);
+        y += 26 + FieldGap;
+
+        _autoOpenReview = new CheckBox
+        {
+            Text = "Open review page in browser when recording stops",
+            Location = new Point(TabPad, y),
+            Size = new Size(InputWidth, 24),
+        };
+        page.Controls.Add(_autoOpenReview);
+        y += 24 + 2;
+        page.Controls.Add(MakeHint(
+            "A clickable page whose markers jump to that moment in the video/audio. A balloon and tray item always appear; this also auto-opens it.",
+            TabPad + 22, y));
 
         return page;
     }
@@ -709,6 +723,7 @@ internal sealed class SettingsForm : Form
         var csv = cfg.MarkerLogFormat.Equals("Csv", StringComparison.OrdinalIgnoreCase);
         _markerCsv.Checked = csv;
         _markerMarkdown.Checked = !csv;
+        _autoOpenReview.Checked = cfg.AutoOpenMarkerReview;
 
         SelectComboByValue(_bitrate, cfg.Mp3BitrateKbps,
             o => ((BitrateOption)o!).Kbps);
@@ -825,6 +840,7 @@ internal sealed class SettingsForm : Form
             QuickMarkHotkey = _quickMarkHotkey.Hotkey,
             MarkWithNoteHotkey = _markWithNoteHotkey.Hotkey,
             MarkerLogFormat = _markerCsv.Checked ? "Csv" : "Markdown",
+            AutoOpenMarkerReview = _autoOpenReview.Checked,
             Mp3BitrateKbps = bitrate,
             MicrophoneDeviceId = micId,
             SystemAudioDeviceId = renderId,
