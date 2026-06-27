@@ -263,4 +263,23 @@ public class AppConfigStoreTests
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }
+
+    [Fact]
+    public void Default_AutoOpenMarkerReview_IsFalse()
+        => Assert.False(new AppConfig().AutoOpenMarkerReview);
+
+    [Fact]
+    public void Save_RoundtripsAutoOpenMarkerReview()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sprec_cfg_{Guid.NewGuid():N}.json");
+        try
+        {
+            var store = new AppConfigStore(path, new AppConfig());
+            store.Save(new AppConfig { AutoOpenMarkerReview = true });
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.True(doc.RootElement.GetProperty("AutoOpenMarkerReview").GetBoolean());
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
 }

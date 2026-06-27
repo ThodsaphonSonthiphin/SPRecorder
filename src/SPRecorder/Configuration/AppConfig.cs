@@ -11,6 +11,7 @@ public sealed record AppConfig
     public string QuickMarkHotkey    { get; init; } = "Ctrl+Alt+M";
     public string MarkWithNoteHotkey { get; init; } = "Ctrl+Alt+N";
     public string MarkerLogFormat    { get; init; } = "Markdown";   // "Markdown" | "Csv"
+    public bool AutoOpenMarkerReview { get; init; } = false;
 
     public int Mp3BitrateKbps { get; init; } = 96;
 
