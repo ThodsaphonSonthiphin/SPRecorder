@@ -135,4 +135,24 @@ public class MarkerLogTests
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }
+
+    [Fact]
+    public void Append_AccumulatesEntries()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"sprec_mk_{Guid.NewGuid():N}.md");
+        try
+        {
+            using var log = new MarkerLog(path, "Markdown");
+            log.Append(Stamp(0, 12, 34, 14, 32, 39), "decision");
+            log.Append(Stamp(0, 25, 10, 14, 45, 15), null);
+
+            Assert.Equal(2, log.Entries.Count);
+            Assert.Equal(1, log.Entries[0].Seq);
+            Assert.Equal(new TimeSpan(0, 12, 34), log.Entries[0].Elapsed);
+            Assert.Equal("decision", log.Entries[0].Note);
+            Assert.Equal(2, log.Entries[1].Seq);
+            Assert.Null(log.Entries[1].Note);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
 }

@@ -4,6 +4,7 @@ using System.Text;
 namespace SPRecorder.Recording;
 
 public readonly record struct MarkerStamp(TimeSpan Elapsed, DateTime WallClock);
+public readonly record struct MarkerEntry(int Seq, TimeSpan Elapsed, DateTime WallClock, string? Note);
 
 /// <summary>
 /// Owns the sidecar Marker log for one Recording Session. Lines are appended and
@@ -17,6 +18,8 @@ public sealed class MarkerLog : IDisposable
     private readonly bool _csv;
     private StreamWriter? _writer;
     private int _count;
+    private readonly List<MarkerEntry> _entries = new();
+    public IReadOnlyList<MarkerEntry> Entries => _entries;
 
     public string Path { get; }
     public int Count => _count;
@@ -36,6 +39,7 @@ public sealed class MarkerLog : IDisposable
             if (_csv) { _writer.WriteLine(CsvHeader); }
         }
         _count++;
+        _entries.Add(new MarkerEntry(_count, stamp.Elapsed, stamp.WallClock, note));
         _writer.WriteLine(_csv ? CsvRow(_count, stamp, note) : MarkdownLine(_count, stamp, note));
         _writer.Flush();
         return _count;
