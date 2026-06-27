@@ -30,6 +30,7 @@ public sealed class RecordingSession : IDisposable
     public string? MixedFilePath { get; private set; }
     public string? ScreenFilePath { get; private set; }
     public string? MarkerLogPath { get; private set; }
+    public string? ReviewPagePath { get; private set; }
 
     public event Action<State>? StateChanged;
     public event Action<string>? Warning;
@@ -37,6 +38,7 @@ public sealed class RecordingSession : IDisposable
     public event Action<string?>? MixingCompleted;
     public event Action<int>? SplitCompleted;  // arg = total chunks across all tracks
     public event Action<int, TimeSpan>? MarkerAdded;  // (sequence, elapsed)
+    public event Action<string>? ReviewPageReady;   // arg = final review-page path
 
     public RecordingSession(Func<AppConfig> configGetter, Func<string?>? sessionNamePrompt = null)
     {
@@ -68,6 +70,8 @@ public sealed class RecordingSession : IDisposable
         MarkerLogPath = Path.Combine(_activeConfig.OutputDirectory,
             FileNameBuilder.BuildMarker(_activeConfig.FileNamePattern, _startedAt, _activeConfig.MarkerLogFormat));
         _markerLog = new MarkerLog(MarkerLogPath, _activeConfig.MarkerLogFormat);
+        ReviewPagePath = Path.Combine(_activeConfig.OutputDirectory,
+            FileNameBuilder.BuildReviewPage(_activeConfig.FileNamePattern, _startedAt));
         _sessionLabel = null;
 
         _systemCapture = new SystemAudioCapture(_activeConfig.SystemAudioDeviceId);
@@ -186,6 +190,10 @@ public sealed class RecordingSession : IDisposable
 
         if (willMix || willSplit)
             StartPostProcessingInBackground(willMix, willSplit);
+        else
+            WriteReviewPage(ReviewPagePath, _sessionLabel, _startedAt,
+                _markerLog?.Entries ?? (IReadOnlyList<MarkerEntry>)Array.Empty<MarkerEntry>(),
+                ScreenFilePath, null);   // no mix/split → only the screen video can be a track
     }
 
     private void TryRenameToSessionFolder()
@@ -229,6 +237,9 @@ public sealed class RecordingSession : IDisposable
                 File.Move(MarkerLogPath, newMarkers);
                 MarkerLogPath = newMarkers;
             }
+
+            if (ReviewPagePath is not null)
+                ReviewPagePath = Path.Combine(folder, $"{folderName}_review.html");
         }
         catch (Exception ex)
         {
@@ -245,6 +256,14 @@ public sealed class RecordingSession : IDisposable
         var bitrate   = cfg.Mp3BitrateKbps;
         var sampleRate = cfg.MixedFileSampleRate;
         var stereo    = cfg.MixedFileFormat.Equals("Stereo", StringComparison.OrdinalIgnoreCase);
+        var screenPath = ScreenFilePath;
+        var label      = _sessionLabel;
+        var startedAt  = _startedAt;
+        var reviewPath = ReviewPagePath;
+        var entries    = _markerLog is { } ml
+            ? new List<MarkerEntry>(ml.Entries)
+            : new List<MarkerEntry>();
+        bool keepMixedWhole = entries.Count > 0;   // ADR 0021
 
         if (sysPath is null || micPath is null || mixedPath is null) return;
         if (!File.Exists(sysPath) || !File.Exists(micPath)) return;
@@ -276,15 +295,16 @@ public sealed class RecordingSession : IDisposable
                 if (cfg.SplitSystemTrack)            totalChunks += SplitTrack(splitter, sysPath,   cfg);
                 if (cfg.SplitMicTrack)               totalChunks += SplitTrack(splitter, micPath,   cfg);
                 if (cfg.SplitMixedTrack && finalMixedPath is not null)
-                                             totalChunks += SplitTrack(splitter, finalMixedPath, cfg);
+                                             totalChunks += SplitTrack(splitter, finalMixedPath, cfg, keepMixedWhole);
             }
 
             MixingCompleted?.Invoke(finalMixedPath);
             if (willSplit) SplitCompleted?.Invoke(totalChunks);
+            WriteReviewPage(reviewPath, label, startedAt, entries, screenPath, finalMixedPath);
         });
     }
 
-    private int SplitTrack(IMp3Splitter splitter, string path, AppConfig cfg)
+    private int SplitTrack(IMp3Splitter splitter, string path, AppConfig cfg, bool preserveOriginal = false)
     {
         if (!File.Exists(path)) return 0;
         try
@@ -295,7 +315,7 @@ public sealed class RecordingSession : IDisposable
 
             if (chunks.Count > 1)
             {
-                File.Delete(path);
+                if (!preserveOriginal) File.Delete(path);   // ADR 0021: keep whole Mixed when markers exist
                 return chunks.Count;
             }
             return 0;
@@ -304,6 +324,32 @@ public sealed class RecordingSession : IDisposable
         {
             Warning?.Invoke($"Split failed for {Path.GetFileName(path)}: {ex.Message}");
             return 0;
+        }
+    }
+
+    private void WriteReviewPage(string? reviewPath, string? label, DateTime startedAt,
+                                 IReadOnlyList<MarkerEntry> entries, string? screenPath, string? mixedPath)
+    {
+        if (reviewPath is null || entries.Count == 0) return;
+
+        var media = new List<ReviewMedia>();
+        if (screenPath is not null && File.Exists(screenPath))
+            media.Add(new ReviewMedia("video", Path.GetFileName(screenPath)));
+        if (mixedPath is not null && File.Exists(mixedPath))
+            media.Add(new ReviewMedia("audio", Path.GetFileName(mixedPath)));
+        if (media.Count == 0) return;   // no playable track (ADR 0020) — marker log still stands
+
+        var title = string.IsNullOrWhiteSpace(label)
+            ? startedAt.ToString("yyyy-MM-dd HH:mm:ss")
+            : label!;
+        try
+        {
+            MarkerReviewPage.Write(reviewPath, title, startedAt, entries, media);
+            ReviewPageReady?.Invoke(reviewPath);
+        }
+        catch (Exception ex)
+        {
+            Warning?.Invoke("Marker review page could not be written: " + ex.Message);
         }
     }
 
